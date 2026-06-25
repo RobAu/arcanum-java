@@ -1,0 +1,55 @@
+{
+  "_comment": "Maps C engine/libc functions to Java runtime-shim calls. Derived from the TIG public API inventory (first_party/tig/include/tig/*.h). Prefix rules are tried longest-first; 'strip' chars are removed from the C name, the remainder is camelCased to form the Java method. Example: tig_color_rgb_to_grayscale -> TigColor.rgbToGrayscale.",
+
+  "exact": {
+    "tig_init": ["Tig", "init"],
+    "tig_exit": ["Tig", "exit"],
+    "tig_ping": ["Tig", "ping"],
+    "tig_set_active": ["Tig", "setActive"],
+    "tig_get_active": ["Tig", "getActive"]
+  },
+
+  "prefixes": [
+    ["tig_video_buffer_", "TigVideoBuffer", "tig_video_buffer_"],
+    ["tig_video_", "TigVideo", "tig_video_"],
+    ["tig_art_", "TigArt", "tig_art_"],
+    ["tig_font_", "TigFont", "tig_font_"],
+    ["tig_color_", "TigColor", "tig_color_"],
+    ["tig_rect_", "TigRect", "tig_rect_"],
+    ["tig_line_", "TigRect", "tig_"],
+    ["tig_mouse_", "TigMouse", "tig_mouse_"],
+    ["tig_kb_", "TigKeyboard", "tig_kb_"],
+    ["tig_message_", "TigMessage", "tig_message_"],
+    ["tig_button_", "TigButton", "tig_button_"],
+    ["tig_window_", "TigWindow", "tig_window_"],
+    ["tig_sound_", "TigSound", "tig_sound_"],
+    ["tig_timer_", "TigTimer", "tig_timer_"],
+    ["tig_file_cache_", "TigFileCache", "tig_file_cache_"],
+    ["tig_file_", "TigFile", "tig_file_"],
+    ["tig_database_", "TigDatabase", "tig_database_"],
+    ["tig_find_", "TigFindFile", "tig_find_"],
+    ["tig_memory_", "TigMemory", "tig_memory_"],
+    ["tig_bmp_", "TigBmp", "tig_bmp_"],
+    ["tig_palette_", "TigPalette", "tig_palette_"],
+    ["tig_draw_", "TigDraw", "tig_draw_"],
+    ["tig_movie_", "TigMovie", "tig_movie_"],
+    ["tig_guid_", "TigGuid", "tig_guid_"],
+    ["tig_idxtable_", "TigIdxTable", "tig_idxtable_"],
+    ["tig_str_parse_", "TigStrParse", "tig_str_parse_"],
+    ["tig_str_match_", "TigStrParse", "tig_str_"],
+    ["tig_bsearch", "TigBsearch", "tig_"],
+    ["tig_debug_", "TigDebug", "tig_debug_"],
+    ["compat_", "Compat", "compat_"]
+  ],
+
+  "libc": [
+    "strcmp", "stricmp", "strcasecmp", "strncmp", "strcpy", "strncpy",
+    "strlcpy", "strlcat", "strcat", "strncat", "strlen", "strchr", "strrchr",
+    "strstr", "strtok", "strdup", "sprintf", "snprintf", "printf", "fprintf",
+    "sscanf", "atoi", "atol", "atof", "memcpy", "memmove", "memset", "memcmp",
+    "malloc", "calloc", "realloc", "free", "qsort", "bsearch", "abs", "labs",
+    "llabs", "min", "max", "tolower", "toupper", "isdigit", "isalpha", "isspace",
+    "isalnum", "rand", "srand", "sqrt", "pow", "atan2", "floor", "ceil", "fabs",
+    "time"
+  ]
+}

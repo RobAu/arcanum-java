@@ -392,3 +392,6 @@ FodyWeavers.xsd
 /out
 /build
 CMakeUserPresets.json
+
+# c2java transpiler virtualenv
+.c2j-venv/
