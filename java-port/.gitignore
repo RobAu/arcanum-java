@@ -1,0 +1,10 @@
+.gradle/
+build/
+!gradle/wrapper/gradle-wrapper.jar
+.idea/
+*.iml
+out/
+bin/
+
+# c2java transpiler output (regenerate with: python -m c2j all)
+generated/

@@ -1,0 +1,83 @@
+// Arcanum CE -- Java port (libGDX).
+//
+// Source layout:
+//   src/main/java       hand-written runtime: the TIG->libGDX shim + CLib + launcher
+//   generated/java      output of the c2java transpiler (../c2java)
+//
+// The hand-written runtime is the default build target and always compiles.
+// The transpiled game code is a SEPARATE source set ("generated") so that a
+// partial port does not break `./gradlew build`. Compile it explicitly with
+// `./gradlew compileGeneratedJava` as more modules are ported. Self-contained
+// generated files (enums, structs, function-pointer interfaces) compile today;
+// module "holder" classes compile once their dependency modules are ported.
+
+plugins {
+    id 'application'
+}
+
+group = 'com.arcanum.ce'
+version = '0.1.0'
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
+repositories {
+    mavenCentral()
+}
+
+ext {
+    gdxVersion = '1.12.1'
+}
+
+sourceSets {
+    main {
+        java {
+            srcDirs = ['src/main/java']
+        }
+    }
+    generated {
+        java {
+            srcDirs = ['generated/java']
+        }
+        // generated game code calls into the shim/runtime (main output)
+        compileClasspath += sourceSets.main.output + configurations.runtimeClasspath
+    }
+}
+
+dependencies {
+    implementation "com.badlogicgames.gdx:gdx:$gdxVersion"
+    implementation "com.badlogicgames.gdx:gdx-backend-lwjgl3:$gdxVersion"
+    implementation "com.badlogicgames.gdx:gdx-freetype:$gdxVersion"
+    runtimeOnly "com.badlogicgames.gdx:gdx-platform:$gdxVersion:natives-desktop"
+    runtimeOnly "com.badlogicgames.gdx:gdx-freetype-platform:$gdxVersion:natives-desktop"
+
+    testImplementation platform('org.junit:junit-bom:5.10.2')
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+test {
+    useJUnitPlatform()
+    testLogging { events 'passed', 'failed', 'skipped' }
+}
+
+application {
+    mainClass = 'com.arcanum.ce.DesktopLauncher'
+}
+
+// Convenience: compile the transpiled code on demand.
+tasks.register('compileGenerated') {
+    dependsOn 'compileGeneratedJava'
+    description = 'Compiles the c2java-generated sources in generated/java.'
+    group = 'build'
+}
+
+// Allow forwarding -Darcanum.* and headless props to the app JVM via `gradlew run`.
+run {
+    ['arcanum.data', 'arcanum.screenshot', 'org.lwjgl.util.NoChecks'].each { k ->
+        if (System.getProperty(k) != null) systemProperty k, System.getProperty(k)
+    }
+}
