@@ -46,8 +46,13 @@ cd java-port
 
 With game data present the app reproduces the C boot sequence
 (`src/main.c`): init TIG → register `.dat` archives → install the art-name
-resolver → show the **real main menu** (`MainMenuBack.ART` + labels from
-`mes\mainmenu.mes`). Without data it shows a placeholder.
+resolver → show the **interactive main menu** (`MainMenuBack.ART` + labels
+from `mes\mainmenu.mes`). Hover highlights an option, left-click navigates
+(Main → Single Player / Options / Credits), right-click or Esc goes back,
+Exit Game quits. Without data it shows a placeholder.
+
+Headless capture extras: `-Darcanum.menu=options` starts on a submenu and
+`-Darcanum.hover=N` force-highlights option N (for screenshots).
 
 ## TIG → libGDX shim mapping
 
