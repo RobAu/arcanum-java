@@ -11,6 +11,7 @@ import com.badlogic.gdx.graphics.g2d.BitmapFont;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.badlogic.gdx.utils.ScreenUtils;
 
+import com.arcanum.ce.game.NameResolver;
 import com.arcanum.ce.tig.Tig;
 import com.arcanum.ce.tig.TigArt;
 import com.arcanum.ce.tig.art.ArtId;
@@ -33,13 +34,10 @@ public final class ArcanumGame extends ApplicationAdapter {
     private BitmapFont font;
     private boolean haveData;
     private int frames;
-    private float animTimer;
-    private int critterFrame;
 
     // Sprites for the demo scene (repository paths; safe if absent).
     private static final String TILE = "art\\tile\\bg1bg21a.art";
     private static final String CHEST = "art\\container\\blackchest1.art";
-    private static final String CRITTER = "art\\critter\\dfm\\dfmbnsad.art";
 
     @Override
     public void create() {
@@ -48,6 +46,9 @@ public final class ArcanumGame extends ApplicationAdapter {
         batch = new SpriteBatch();
         font = new BitmapFont();
         haveData = GameData.discoverAndRegister() != null;
+        if (haveData) {
+            NameResolver.install();   // art_id -> path for non-system art
+        }
     }
 
     @Override
@@ -58,13 +59,6 @@ public final class ArcanumGame extends ApplicationAdapter {
 
         int h = Gdx.graphics.getHeight();
         int w = Gdx.graphics.getWidth();
-
-        // Advance the critter's walk animation (~10 fps).
-        animTimer += Gdx.graphics.getDeltaTime();
-        if (animTimer > 0.1f) {
-            animTimer = 0f;
-            critterFrame++;
-        }
 
         batch.begin();
         if (haveData) {
@@ -94,15 +88,11 @@ public final class ArcanumGame extends ApplicationAdapter {
         // A container sitting on the ground.
         TigArt.draw(batch, CHEST, 0, 0, 0, 120, h - 170, h, false);
 
-        // The animated critter, mid-screen, plus a mirrored copy facing the other way.
-        var critter = TigArt.load(CRITTER);
-        if (critter != null) {
-            int nf = critter.numFrames;
-            int rot = 0;                          // facing
-            int frame = nf > 0 ? critterFrame % nf : 0;
-            TigArt.draw(batch, CRITTER, rot, frame, 0, 260, h - 200, h, false);
-            TigArt.draw(batch, CRITTER, rot, frame, 0, 340, h - 200, h, true);
-        }
+        // The critter, drawn purely from a tig_art_id_t -- NameResolver turns the
+        // id into art\critter\DFM\DFMBNSAd.art, then it is decoded and rendered.
+        // (DWARF/MALE/BARBARIAN/shield/no-weapon, anim 3.)
+        int critterId = ArtId.critterIdCreate(1, 1, 7, 1, 0, 0, 3, 0, 0);
+        TigArt.draw(batch, critterId, 280, h - 200, h);
 
         // Interface elements drawn by tig_art_id_t (system art -> path -> render),
         // proving the full art-id resolution chain: lens + button reticles.

@@ -60,6 +60,20 @@ public final class ArtId {
     static final int MAX_PALETTES = 4;
     static final int MAX_ROTATIONS = 8;
 
+    // Critter / monster / scenery / container / eye-candy field shifts.
+    static final int CRITTER_ID_SHIELD_SHIFT = 19;
+    static final int CRITTER_ID_ARMOR_SHIFT = 20;
+    static final int CRITTER_ID_BODY_TYPE_SHIFT = 24;
+    static final int CRITTER_ID_GENDER_SHIFT = 27;
+    static final int ANIM_SHIFT = 6;            // tig_art_id_anim_get: (id>>6)&0x1F
+    static final int MONSTER_ID_ARMOR_SHIFT = 20;
+    static final int MONSTER_ID_SPECIE_SHIFT = 23;
+    static final int SCENERY_ID_TYPE_SHIFT = 6;
+    static final int SCENERY_ID_MAX_TYPE = 32;
+    static final int CONTAINER_ID_TYPE_SHIFT = 6;
+    static final int CONTAINER_ID_MAX_TYPE = 32;
+    static final int EYE_CANDY_ID_TYPE_SHIFT = 6;
+
     private ArtId() {
     }
 
@@ -153,5 +167,66 @@ public final class ArtId {
                 | ((frame & (INTERFACE_ID_MAX_FRAME - 1)) << INTERFACE_ID_FRAME_SHIFT)
                 | ((a3 & 1) << 7)
                 | ((palette & (MAX_PALETTES - 1)) << ART_ID_PALETTE_SHIFT);
+    }
+
+    /** tig_art_critter_id_create. */
+    public static int critterIdCreate(int gender, int bodyType, int armor, int shield,
+                                      int frame, int rotation, int anim, int weapon,
+                                      int palette) {
+        return (TYPE_CRITTER << ART_ID_TYPE_SHIFT)
+                | ((gender & 1) << CRITTER_ID_GENDER_SHIFT)
+                | ((bodyType & 7) << CRITTER_ID_BODY_TYPE_SHIFT)
+                | ((armor & 0xF) << CRITTER_ID_ARMOR_SHIFT)
+                | ((shield & 1) << CRITTER_ID_SHIELD_SHIFT)
+                | ((frame & 0x1F) << ART_ID_FRAME_SHIFT)
+                | ((rotation & (MAX_ROTATIONS - 1)) << ART_ID_ROTATION_SHIFT)
+                | ((anim & 0x1F) << ANIM_SHIFT)
+                | ((palette & (MAX_PALETTES - 1)) << ART_ID_PALETTE_SHIFT)
+                | (weapon & 0xF);
+    }
+
+    // -- critter / monster / etc. field getters (tig_art_*_get) --------------
+    public static int anim(int artId) {
+        return (artId >>> ANIM_SHIFT) & 0x1F;
+    }
+
+    public static int critterArmor(int artId) {
+        return (artId >>> CRITTER_ID_ARMOR_SHIFT) & 0xF;
+    }
+
+    public static int critterBodyType(int artId) {
+        return (artId >>> CRITTER_ID_BODY_TYPE_SHIFT) & 7;
+    }
+
+    public static int critterGender(int artId) {
+        return (artId >>> CRITTER_ID_GENDER_SHIFT) & 1;
+    }
+
+    public static int critterShield(int artId) {
+        return (artId >>> CRITTER_ID_SHIELD_SHIFT) & 1;
+    }
+
+    public static int critterWeapon(int artId) {
+        return artId & 0xF;
+    }
+
+    public static int monsterArmor(int artId) {
+        return (artId >>> MONSTER_ID_ARMOR_SHIFT) & 7;
+    }
+
+    public static int monsterSpecie(int artId) {
+        return (artId >>> MONSTER_ID_SPECIE_SHIFT) & 0x3F;
+    }
+
+    public static int sceneryType(int artId) {
+        return (artId >>> SCENERY_ID_TYPE_SHIFT) & (SCENERY_ID_MAX_TYPE - 1);
+    }
+
+    public static int containerType(int artId) {
+        return (artId >>> CONTAINER_ID_TYPE_SHIFT) & (CONTAINER_ID_MAX_TYPE - 1);
+    }
+
+    public static int eyeCandyType(int artId) {
+        return (artId >>> EYE_CANDY_ID_TYPE_SHIFT) & 0x7;
     }
 }
