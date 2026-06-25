@@ -14,30 +14,28 @@ import com.badlogic.gdx.utils.ScreenUtils;
 import com.arcanum.ce.game.NameResolver;
 import com.arcanum.ce.tig.Tig;
 import com.arcanum.ce.tig.TigArt;
-import com.arcanum.ce.tig.art.ArtId;
+import com.arcanum.ce.ui.MainMenuScreen;
+import com.arcanum.ce.ui.Screen;
 
 /**
  * Root libGDX application.
  *
- * Boots the TIG runtime, discovers the game data archives, and renders a small
- * scene built from real Arcanum sprites (a ground tile, a container, and an
- * animated critter) decoded straight from the {@code .dat} files via the ported
- * ART decoder. If no game data is found it falls back to a placeholder message.
+ * Reproduces the shape of the C engine's boot sequence ({@code src/main.c}):
+ * initialise the TIG runtime, discover the game-data archives, install the
+ * art-name resolver, then enter the main menu screen. Each frame pings the
+ * runtime and renders the active {@link Screen}. If no game data is found it
+ * shows a placeholder instead of the menu.
  *
- * Headless capture: pass {@code -Darcanum.screenshot=<path.png>} to render one
- * frame, save it, and exit -- used to verify the renderer without a human at the
- * window.
+ * Headless capture: {@code -Darcanum.screenshot=<png>} renders one frame, saves
+ * it, and exits.
  */
 public final class ArcanumGame extends ApplicationAdapter {
 
     private SpriteBatch batch;
     private BitmapFont font;
+    private Screen screen;
     private boolean haveData;
     private int frames;
-
-    // Sprites for the demo scene (repository paths; safe if absent).
-    private static final String TILE = "art\\tile\\bg1bg21a.art";
-    private static final String CHEST = "art\\container\\blackchest1.art";
 
     @Override
     public void create() {
@@ -45,9 +43,12 @@ public final class ArcanumGame extends ApplicationAdapter {
         TigArt.init();
         batch = new SpriteBatch();
         font = new BitmapFont();
+
         haveData = GameData.discoverAndRegister() != null;
         if (haveData) {
-            NameResolver.install();   // art_id -> path for non-system art
+            NameResolver.install();             // art_id -> path for non-system art
+            screen = new MainMenuScreen();      // the real boot screen
+            screen.create();
         }
     }
 
@@ -61,51 +62,16 @@ public final class ArcanumGame extends ApplicationAdapter {
         int w = Gdx.graphics.getWidth();
 
         batch.begin();
-        if (haveData) {
-            drawScene(w, h);
+        if (screen != null) {
+            screen.render(batch, font, w, h);
+        } else {
+            font.draw(batch, "Arcanum CE (Java) -- boot OK (no game data; "
+                    + "set -Darcanum.data=<dir>)", 16, h - 12);
         }
-        font.draw(batch, haveData
-                ? "Arcanum CE (Java) -- real sprites decoded from .dat archives"
-                : "Arcanum CE (Java) -- boot OK (no game data; set -Darcanum.data=<dir>)",
-                16, h - 12);
         batch.end();
 
         frames++;
         maybeScreenshot();
-    }
-
-    private void drawScene(int w, int h) {
-        // Tile the ground across the bottom with a real terrain tile.
-        TigArt.ArtSize ts = sizeOf(TILE);
-        if (ts != null) {
-            for (int y = h - ts.height * 3; y < h; y += ts.height) {
-                for (int x = 0; x < w; x += ts.width) {
-                    TigArt.draw(batch, TILE, 0, 0, 0, x, y, h, false);
-                }
-            }
-        }
-
-        // A container sitting on the ground.
-        TigArt.draw(batch, CHEST, 0, 0, 0, 120, h - 170, h, false);
-
-        // The critter, drawn purely from a tig_art_id_t -- NameResolver turns the
-        // id into art\critter\DFM\DFMBNSAd.art, then it is decoded and rendered.
-        // (DWARF/MALE/BARBARIAN/shield/no-weapon, anim 3.)
-        int critterId = ArtId.critterIdCreate(1, 1, 7, 1, 0, 0, 3, 0, 0);
-        TigArt.draw(batch, critterId, 280, h - 200, h);
-
-        // Interface elements drawn by tig_art_id_t (system art -> path -> render),
-        // proving the full art-id resolution chain: lens + button reticles.
-        int lensId = ArtId.miscIdCreate(5 /*TIG_ART_SYSTEM_LENS*/, 0);
-        int buttonId = ArtId.miscIdCreate(1 /*TIG_ART_SYSTEM_BUTTON*/, 0);
-        TigArt.draw(batch, lensId, w - 80, 40, h);
-        TigArt.draw(batch, buttonId, w - 160, 44, h);
-    }
-
-    private TigArt.ArtSize sizeOf(String path) {
-        int[] wd = new int[1];
-        int[] ht = new int[1];
-        return TigArt.size(path, wd, ht) == 0 ? new TigArt.ArtSize(wd[0], ht[0]) : null;
     }
 
     private void maybeScreenshot() {
@@ -146,6 +112,9 @@ public final class ArcanumGame extends ApplicationAdapter {
 
     @Override
     public void dispose() {
+        if (screen != null) {
+            screen.dispose();
+        }
         if (batch != null) {
             batch.dispose();
         }

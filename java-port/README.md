@@ -36,8 +36,18 @@ Two source roots, wired in `build.gradle`:
 ```console
 cd java-port
 ./gradlew compileJava     # build the runtime + shim (downloads libGDX)
-./gradlew run             # launch the placeholder app
+./gradlew run             # launch the app
+
+# With game data, the app boots into the real main menu:
+./gradlew run -Darcanum.data=/path/to/Arcanum
+# Headless render of one frame to a PNG (then exit):
+./gradlew run -Darcanum.data=/path/to/Arcanum -Darcanum.screenshot=out.png
 ```
+
+With game data present the app reproduces the C boot sequence
+(`src/main.c`): init TIG → register `.dat` archives → install the art-name
+resolver → show the **real main menu** (`MainMenuBack.ART` + labels from
+`mes\mainmenu.mes`). Without data it shows a placeholder.
 
 ## TIG → libGDX shim mapping
 
