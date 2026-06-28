@@ -11,6 +11,7 @@ import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 
 import com.arcanum.ce.tig.TigArt;
 import com.arcanum.ce.tig.art.ArtId;
+import com.arcanum.ce.tig.font.TigFontRenderer;
 import com.arcanum.ce.tig.mes.Mes;
 
 /**
@@ -56,7 +57,10 @@ public final class MainMenuScreen implements Screen {
     private static final Color HOVER = new Color(1f, 0.95f, 0.6f, 1f);
     private static final Color DIM = new Color(0.55f, 0.5f, 0.4f, 1f);
 
+    private static final int MENU_FONT_ART_NUM = 27;   // morph15font.art
+
     private int mainmenuMes = Mes.INVALID_HANDLE;
+    private TigFontRenderer menuFont;
     private final Deque<Window> backStack = new ArrayDeque<>();
     private Window current = Window.MAINMENU;
     private boolean ready;
@@ -65,6 +69,7 @@ public final class MainMenuScreen implements Screen {
     @Override
     public void create() {
         mainmenuMes = Mes.load("mes\\mainmenu.mes");
+        menuFont = TigFontRenderer.load(MENU_FONT_ART_NUM);
         ready = TigArt.load(TigArt.buildPath(backgroundIdOf(Window.MAINMENU))) != null;
 
         String startMenu = System.getProperty("arcanum.menu");
@@ -153,13 +158,18 @@ public final class MainMenuScreen implements Screen {
             Item it = items[i];
             String label = mainmenuMes != Mes.INVALID_HANDLE
                     ? Mes.getMsg(mainmenuMes, it.labelId) : "?";
-            font.setColor(it.action == Action.UNIMPLEMENTED ? DIM
-                    : (i == hovered ? HOVER : NORMAL));
+            Color color = it.action == Action.UNIMPLEMENTED ? DIM
+                    : (i == hovered ? HOVER : NORMAL);
             float lx = bx + BUTTON_X;
-            float ly = height - (by + it.y) - 4;   // top-left -> libGDX baseline
-            font.draw(batch, label, lx, ly);
+            if (menuFont != null) {
+                menuFont.draw(batch, label, lx, by + it.y, height, color);
+            } else {
+                float ly = height - (by + it.y) - 4;   // top-left -> baseline
+                font.setColor(color);
+                font.draw(batch, label, lx, ly);
+                font.setColor(Color.WHITE);
+            }
         }
-        font.setColor(Color.WHITE);
     }
 
     /** @return index of the option under the mouse, or -1. */
