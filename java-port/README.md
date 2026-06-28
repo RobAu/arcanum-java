@@ -33,8 +33,19 @@ Two source roots, wired in `build.gradle`:
 
 ## Build & run
 
+### Clickable launcher
+
 ```console
 cd java-port
+./install-desktop-entry.sh   # adds "Arcanum CE (Java)" to your app menu + Desktop
+```
+
+Installs a desktop entry that runs `play.sh` (auto-detects the game data and
+launches to the menu). The icon is rendered locally from the game's own art and
+is never committed. `./play.sh` runs it from a shell; `./play.sh world` boots
+straight into the world view.
+
+```console
 ./gradlew compileJava     # build the runtime + shim (downloads libGDX)
 ./gradlew run             # launch the app
 
