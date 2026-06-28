@@ -51,8 +51,18 @@ from `mes\mainmenu.mes`). Hover highlights an option, left-click navigates
 (Main → Single Player / Options / Credits), right-click or Esc goes back,
 Exit Game quits. Without data it shows a placeholder.
 
-Headless capture extras: `-Darcanum.menu=options` starts on a submenu and
-`-Darcanum.hover=N` force-highlights option N (for screenshots).
+**Single Player → New Game** opens the **isometric world view**
+(`MapWorldScreen`): a real `.sec` sector decoded from the archives, its 4096
+terrain tiles projected with the engine's isometric transform and drawn through
+the `TigArt` pipeline (see `tile-rendering-spec.md`). Arrow keys / WASD or
+left-drag scroll; Esc / right-click returns to the menu.
+
+Headless capture extras: `-Darcanum.menu=options` starts on a submenu,
+`-Darcanum.hover=N` force-highlights option N, `-Darcanum.screen=world` boots
+straight into the world view, and `-Darcanum.sector=<repo\path.sec>` picks the
+sector (default: a plains template). Diagnostics: `./gradlew runTool
+-Ptool=tools.MapLister` lists terrain sectors; `-Ptool=tools.SecDump
+-Pargs=<path>` dumps + resolves a sector's tiles.
 
 ## TIG → libGDX shim mapping
 

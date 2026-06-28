@@ -229,4 +229,70 @@ public final class ArtId {
     public static int eyeCandyType(int artId) {
         return (artId >>> EYE_CANDY_ID_TYPE_SHIFT) & 0x7;
     }
+
+    // -- tile (TIG_ART_TYPE_TILE) field getters (art.c) ----------------------
+    // A tile id blends two terrain names; see tile-rendering-spec.md.
+    static final int TILE_ID_NUM1_SHIFT = 22;
+    static final int TILE_ID_NUM2_SHIFT = 16;
+    static final int TILE_ID_TYPE_SHIFT = 8;
+    static final int TILE_ID_FLIPPABLE1_SHIFT = 7;
+    static final int TILE_ID_FLIPPABLE2_SHIFT = 6;
+    static final int TILE_ID_MAX_NUM = 64;
+
+    // dword_5BE880 / dword_5BE8C0 (art.c:181,201): blend-index remap tables used
+    // by sub_503700/sub_5037B0 when the tile's flags bit 0 (flip) is set.
+    private static final int[] TILE_BLEND_REMAP_880 = {
+        0, 1, 8, 3, 4, 5, 6, 7, 8, 3, 10, 11, 6, 7, 14, 15,
+    };
+    private static final int[] TILE_BLEND_REMAP_8C0 = {
+        0, 1, 2, 9, 4, 5, 12, 13, 2, 9, 10, 11, 12, 13, 14, 15,
+    };
+
+    /** tig_art_tile_id_num1_get: first terrain-name index. */
+    public static int tileNum1(int artId) {
+        return (artId >>> TILE_ID_NUM1_SHIFT) & (TILE_ID_MAX_NUM - 1);
+    }
+
+    /** tig_art_tile_id_num2_get: second terrain-name index. */
+    public static int tileNum2(int artId) {
+        return (artId >>> TILE_ID_NUM2_SHIFT) & (TILE_ID_MAX_NUM - 1);
+    }
+
+    /** tig_art_tile_id_type_get: 0 = indoor, 1 = outdoor. */
+    public static int tileType(int artId) {
+        return (artId >>> TILE_ID_TYPE_SHIFT) & 1;
+    }
+
+    public static int tileFlippable1(int artId) {
+        return (artId >>> TILE_ID_FLIPPABLE1_SHIFT) & 1;
+    }
+
+    public static int tileFlippable2(int artId) {
+        return (artId >>> TILE_ID_FLIPPABLE2_SHIFT) & 1;
+    }
+
+    /** tig_art_id_flags_get for TILE/WALL/PORTAL/ROOF: low nibble. */
+    public static int tileFlags(int artId) {
+        return artId & 0xF;
+    }
+
+    /** sub_503700: blend index a3 (0..15), remapped when the flip flag is set. */
+    public static int tileBlend(int artId) {
+        int v = (artId >>> 12) & 0xF;
+        if ((tileFlags(artId) & 1) != 0) {
+            v = TILE_BLEND_REMAP_8C0[v];
+        }
+        return v;
+    }
+
+    /** sub_5037B0: variation index a4 (0..15). */
+    public static int tileVariation(int artId) {
+        int v = (artId >>> 9) & 7;
+        int v1 = tileBlend(artId);
+        if (TILE_BLEND_REMAP_8C0[v1] == TILE_BLEND_REMAP_880[v1]
+                && (tileFlags(artId) & 1) != 0) {
+            v += 8;
+        }
+        return v;
+    }
 }

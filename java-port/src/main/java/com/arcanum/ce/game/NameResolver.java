@@ -15,9 +15,10 @@ import com.arcanum.ce.tig.mes.Mes;
  * {@link #install()} so {@link TigArt#buildPath} resolves non-system art.
  *
  * Faithful for: critter, interface, scenery, container, monster, unique_npc,
- * eye_candy. The {@code a_name_*}-driven types (tile, wall, portal, item, light,
- * roof, facade) and {@code name_normalize_aid}'s missing-art fallback remain
- * TODO; those ids resolve to null (the caller falls back).
+ * eye_candy, and tile (base terrain; see {@link TileArtResolver}). The remaining
+ * {@code a_name_*}-driven types (wall, portal, item, light, roof, facade) and
+ * {@code name_normalize_aid}'s missing-art fallback remain TODO; those ids
+ * resolve to null (the caller falls back).
  */
 public final class NameResolver implements ArtPathResolver {
 
@@ -45,6 +46,7 @@ public final class NameResolver implements ArtPathResolver {
     private int monsterMes = Mes.INVALID_HANDLE;
     private int uniqueNpcMes = Mes.INVALID_HANDLE;
     private int eyeCandyMes = Mes.INVALID_HANDLE;
+    private TileArtResolver tileResolver;   // null if tilename.mes is unavailable
     private boolean initialized;
 
     private NameResolver() {
@@ -67,6 +69,8 @@ public final class NameResolver implements ArtPathResolver {
         monsterMes = Mes.load("art\\monster\\monster.mes");
         uniqueNpcMes = Mes.load("art\\unique_npc\\unique_npc.mes");
         eyeCandyMes = Mes.load("art\\eye_candy\\eye_candy.mes");
+        TileNames tileNames = TileNames.load();
+        tileResolver = tileNames != null ? new TileArtResolver(tileNames) : null;
         // The C engine requires all to load; we accept whatever is present so the
         // resolver still works for the types whose tables are available.
         initialized = interfaceMes != Mes.INVALID_HANDLE
@@ -80,6 +84,8 @@ public final class NameResolver implements ArtPathResolver {
             return null;
         }
         switch (ArtId.type(aid)) {
+            case ArtId.TYPE_TILE:
+                return tileResolver != null ? tileResolver.resolve(aid) : null;
             case ArtId.TYPE_CRITTER:
                 return critterPath(aid);
             case ArtId.TYPE_SCENERY: {

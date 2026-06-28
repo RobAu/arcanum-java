@@ -15,7 +15,9 @@ import com.arcanum.ce.game.NameResolver;
 import com.arcanum.ce.tig.Tig;
 import com.arcanum.ce.tig.TigArt;
 import com.arcanum.ce.ui.MainMenuScreen;
+import com.arcanum.ce.ui.MapWorldScreen;
 import com.arcanum.ce.ui.Screen;
+import com.arcanum.ce.ui.ScreenManager;
 
 /**
  * Root libGDX application.
@@ -33,7 +35,6 @@ public final class ArcanumGame extends ApplicationAdapter {
 
     private SpriteBatch batch;
     private BitmapFont font;
-    private Screen screen;
     private boolean haveData;
     private int frames;
 
@@ -46,9 +47,12 @@ public final class ArcanumGame extends ApplicationAdapter {
 
         haveData = GameData.discoverAndRegister() != null;
         if (haveData) {
-            NameResolver.install();             // art_id -> path for non-system art
-            screen = new MainMenuScreen();      // the real boot screen
-            screen.create();
+            NameResolver.install();                       // art_id -> path
+            ScreenManager.push(new MainMenuScreen());     // the real boot screen
+            // Headless/dev shortcut: jump straight into the world view.
+            if ("world".equals(System.getProperty("arcanum.screen"))) {
+                ScreenManager.push(new MapWorldScreen());
+            }
         }
     }
 
@@ -62,6 +66,7 @@ public final class ArcanumGame extends ApplicationAdapter {
         int w = Gdx.graphics.getWidth();
 
         batch.begin();
+        Screen screen = ScreenManager.current();
         if (screen != null) {
             screen.render(batch, font, w, h);
         } else {
@@ -112,9 +117,7 @@ public final class ArcanumGame extends ApplicationAdapter {
 
     @Override
     public void dispose() {
-        if (screen != null) {
-            screen.dispose();
-        }
+        ScreenManager.disposeAll();
         if (batch != null) {
             batch.dispose();
         }

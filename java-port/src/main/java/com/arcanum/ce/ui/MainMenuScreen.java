@@ -47,7 +47,7 @@ public final class MainMenuScreen implements Screen {
         }
     }
 
-    private enum Action { NAVIGATE, BACK, QUIT, UNIMPLEMENTED }
+    private enum Action { NAVIGATE, NEW_GAME, BACK, QUIT, UNIMPLEMENTED }
 
     private static final int BUTTON_X = 410;
     private static final int ITEM_W = 200;
@@ -109,7 +109,7 @@ public final class MainMenuScreen implements Screen {
         switch (w) {
             case SINGLE_PLAYER:
                 return new Item[] {
-                    new Item(50, 143, Action.UNIMPLEMENTED, null),  // New Game
+                    new Item(50, 143, Action.NEW_GAME, null),       // New Game
                     new Item(51, 193, Action.UNIMPLEMENTED, null),  // Load Game
                     new Item(52, 243, Action.UNIMPLEMENTED, null),  // Last Save
                     new Item(53, 293, Action.UNIMPLEMENTED, null),  // View Intro
@@ -212,6 +212,10 @@ public final class MainMenuScreen implements Screen {
             case NAVIGATE:
                 backStack.push(current);
                 current = it.target;
+                break;
+            case NEW_GAME:
+                // No character creation yet: drop straight into the world view.
+                ScreenManager.push(new MapWorldScreen());
                 break;
             case BACK:
                 goBack();

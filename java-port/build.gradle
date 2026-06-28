@@ -78,7 +78,25 @@ tasks.register('compileGenerated') {
 // Allow forwarding -Darcanum.* and headless props to the app JVM via `gradlew run`.
 run {
     ['arcanum.data', 'arcanum.screenshot', 'arcanum.menu', 'arcanum.hover',
+     'arcanum.screen', 'arcanum.sector',
      'org.lwjgl.util.NoChecks'].each { k ->
+        if (System.getProperty(k) != null) systemProperty k, System.getProperty(k)
+    }
+}
+
+// Run a small headless diagnostic tool: `./gradlew runTool -Ptool=tools.MapLister`
+// (class is resolved under com.arcanum.ce). Forwards -Darcanum.data and any args
+// via `-Pargs="a b c"`.
+tasks.register('runTool', JavaExec) {
+    group = 'application'
+    description = 'Run a com.arcanum.ce.* tool main(), e.g. -Ptool=tools.MapLister'
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = project.providers.gradleProperty('tool')
+            .map { "com.arcanum.ce.$it" }.orElse('com.arcanum.ce.tools.MapLister')
+    if (project.hasProperty('args')) {
+        args(project.property('args').toString().split('\\s+'))
+    }
+    ['arcanum.data'].each { k ->
         if (System.getProperty(k) != null) systemProperty k, System.getProperty(k)
     }
 }
