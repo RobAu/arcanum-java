@@ -52,7 +52,15 @@ public final class MapWorldScreen implements Screen {
     @Override
     public void create() {
         sector = SectorFile.load(sectorPath);
-        player = new Player(N / 2, N / 2);
+        int spawnX = N / 2;
+        int spawnY = N / 2;
+        String spawn = System.getProperty("arcanum.spawn");   // "x,y" (debug/verify)
+        if (spawn != null && spawn.matches("\\d+,\\d+")) {
+            String[] xy = spawn.split(",");
+            spawnX = Integer.parseInt(xy[0]);
+            spawnY = Integer.parseInt(xy[1]);
+        }
+        player = new Player(spawnX, spawnY);
     }
 
     @Override

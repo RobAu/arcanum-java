@@ -88,12 +88,24 @@ public final class TileNames {
     }
 
     /**
-     * sub_4EB7D0: index of {@code name} among the *edge* names, or -1 if it is a
-     * base/ground name. Edge tables ({@code load_tile_edges}) are not ported yet,
-     * so every name reads as a base name — correct for single-terrain tiles and a
-     * safe fallback for blends (see tile-rendering-spec.md follow-ups).
+     * sub_4EB7D0: {@code name}'s index in the concatenated outdoor name tables
+     * (flippable first, then non-flippable), or -1 if it is not an outdoor name.
+     * This is the "is this a blendable edge name?" test {@code build_tile_file_name}
+     * uses to order the two terrains in a seam filename. Despite the engine also
+     * having a {@code load_tile_edges} adjacency table, that table is used only by
+     * map generation — filename resolution needs only this lookup.
      */
     public int edgeIndex(String name) {
+        for (int i = 0; i < outdoorFlippable.length; i++) {
+            if (outdoorFlippable[i].equalsIgnoreCase(name)) {
+                return i;
+            }
+        }
+        for (int i = 0; i < outdoorNonFlippable.length; i++) {
+            if (outdoorNonFlippable[i].equalsIgnoreCase(name)) {
+                return outdoorFlippable.length + i;
+            }
+        }
         return -1;
     }
 }

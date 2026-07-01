@@ -64,6 +64,54 @@ class TileRenderingTest {
     }
 
     @Test
+    void edgeIndexIsConcatenatedOutdoorNameIndex() {
+        // sub_4EB7D0: outdoor flippable names first, then outdoor non-flippable.
+        TileNames names = TileNames.of(
+                new String[] {"drt", "grs"},     // flippable:     0, 1
+                new String[] {"dst", "mtn"},     // non-flippable: 2, 3
+                new String[] {"foo"}, new String[] {"bar"});   // indoor: ignored
+        assertEquals(0, names.edgeIndex("drt"));
+        assertEquals(1, names.edgeIndex("grs"));
+        assertEquals(2, names.edgeIndex("dst"));
+        assertEquals(3, names.edgeIndex("mtn"));
+        assertEquals(0, names.edgeIndex("DRT"));      // case-insensitive
+        assertEquals(-1, names.edgeIndex("foo"));     // indoor name is not an edge
+        assertEquals(-1, names.edgeIndex("xyz"));
+    }
+
+    @Test
+    void resolvesTwoTerrainBlendToOrderedName() {
+        // Both terrains are outdoor edge names, so the seam file concatenates them
+        // in edge-index order (drt=0 < grs=1) with the blend charset digit.
+        TileNames names = TileNames.of(new String[] {"drt", "grs"},
+                new String[0], new String[0], new String[0]);
+        TileArtResolver resolver = new TileArtResolver(names);
+        // id: num1=0 num2=1, outdoor, both flippable, blend raw=6 -> charset[6]='2'.
+        int a = 0x00016000 | 0x100 | 0x80 | 0x40;
+        assertEquals(1, ArtId.tileNum2(a));
+        assertEquals(6, ArtId.tileBlend(a));
+        assertEquals("art\\tile\\drtgrs2a.art", resolver.resolve(a));
+    }
+
+    @Test
+    void flippableTileFlipRemapsBlendButClearedFlipUsesRawBlend() {
+        // A flippable tile (both flippable bits) with the flip flag set: sub_503700
+        // remaps the blend (6 -> 12), but the art on disk is the non-flipped form,
+        // reached by clearing the flip bit (raw blend 6). TigArt.draw does this.
+        int flipped = 0x00016000 | 0x100 | 0x80 | 0x40 | 0x1;   // blend raw 6, flip
+        assertEquals(true, ArtId.tileFlippable(flipped));
+        assertEquals(12, ArtId.tileBlend(flipped));             // remapped under flip
+        int cleared = flipped & ~1;
+        assertEquals(6, ArtId.tileBlend(cleared));              // raw blend, no remap
+
+        TileNames names = TileNames.of(new String[] {"drt", "grs"},
+                new String[0], new String[0], new String[0]);
+        TileArtResolver resolver = new TileArtResolver(names);
+        assertEquals("art\\tile\\drtgrsda.art", resolver.resolve(flipped));  // charset[12]='d'
+        assertEquals("art\\tile\\drtgrs2a.art", resolver.resolve(cleared));  // charset[6]='2'
+    }
+
+    @Test
     void parsesSectorTileLayer() {
         // A minimal .sec image: 0 lights, then 4096 sequential tile ids.
         ByteBuffer b = ByteBuffer.allocate(4 + SectorFile.TILE_COUNT * 4)

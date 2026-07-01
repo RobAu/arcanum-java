@@ -216,6 +216,16 @@ public final class TigArt {
      */
     public static int draw(SpriteBatch batch, int artId, float screenX,
                            float screenY, int screenHeight) {
+        // tig_art_blit: a flippable tile with the flip flag is drawn mirrored,
+        // using the art resolved with that flip bit cleared. The flippable tile's
+        // art ships only in its non-flipped orientation, so the raw (un-remapped)
+        // blend name is the one that exists; the mirror is applied at blit time.
+        boolean flipX = false;
+        if (ArtId.type(artId) == ArtId.TYPE_TILE && ArtId.tileFlippable(artId)
+                && (ArtId.tileFlags(artId) & 1) != 0) {
+            flipX = true;
+            artId &= ~1;
+        }
         String path = buildPath(artId);
         if (path == null) {
             return 1;
@@ -230,7 +240,7 @@ public final class TigArt {
         if (pal < 0) {
             pal = 0;
         }
-        draw(batch, path, art, rot, frame, pal, screenX, screenY, screenHeight, false);
+        draw(batch, path, art, rot, frame, pal, screenX, screenY, screenHeight, flipX);
         return 0;
     }
 

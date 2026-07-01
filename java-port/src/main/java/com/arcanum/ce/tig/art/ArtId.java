@@ -271,6 +271,11 @@ public final class ArtId {
         return (artId >>> TILE_ID_FLIPPABLE2_SHIFT) & 1;
     }
 
+    /** tig_art_tile_id_flippable_get (TILE case): both flippable bits set. */
+    public static boolean tileFlippable(int artId) {
+        return tileFlippable1(artId) != 0 && tileFlippable2(artId) != 0;
+    }
+
     /** tig_art_id_flags_get for TILE/WALL/PORTAL/ROOF: low nibble. */
     public static int tileFlags(int artId) {
         return artId & 0xF;
