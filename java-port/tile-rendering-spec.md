@@ -1,15 +1,19 @@
 # Spec: rendering a real Arcanum map sector (terrain tiles)
 
-> **Status: base terrain rendering DONE.** Menu "New Game" → `MapWorldScreen`
+> **Status: terrain rendering with seams DONE.** Menu "New Game" → `MapWorldScreen`
 > loads a real `.sec` and renders its 4096 tiles isometrically from the `.dat`
-> archives (verified headlessly on `terrain\plains\0.sec` and `terrain\desert\0.sec`).
-> Implemented: `ArtId` tile accessors, `TileNames` (tilename.mes), `TileArtResolver`
-> (`a_name_tile_aid_to_fname`/`build_tile_file_name`, base-tile branches),
+> archives, including two-terrain edge blends in "X to Y" sectors (verified
+> headlessly on plains/desert base sectors and the desert→plains seam).
+> Implemented: `ArtId` tile accessors (+ `tileFlippable`), `TileNames`
+> (tilename.mes, incl. `edgeIndex`/`sub_4EB7D0`), `TileArtResolver`
+> (`a_name_tile_aid_to_fname`/`build_tile_file_name`, base **and** two-name blend
+> branches), flippable-tile mirroring in `TigArt.draw` (`tig_art_blit`),
 > `SectorFile` (.sec tile layer), `Location` (iso math), `MapWorldScreen`,
-> `ScreenManager`. Tools: `tools.MapLister`, `tools.SecDump`. Tests:
-> `TileRenderingTest`. **Remaining: tile-edge blending (`load_tile_edges` /
-> `sub_4EB7D0` — needed for terrain seams in "X to Y" sectors), then objects /
-> roofs / lighting / walls, then multi-sector scrolling.**
+> `ScreenManager`. Tools: `tools.MapLister`, `tools.SecDump`, `tools.TileEdgeCheck`.
+> Tests: `TileRenderingTest`. **Remaining: FACADE ids (type 11) in the tile array
+> — cliff/mountain faces, currently unresolved; then objects / roofs / lighting /
+> walls, then multi-sector scrolling.** Note: no `maps\*\map.prp` ship in the base
+> archives — only `terrain\` templates, so real map loading needs module data.
 >
 > Goal: load a real `.sec` sector file from the `.dat` archives and render its
 > terrain tiles in the correct isometric layout, reachable from the menu's
