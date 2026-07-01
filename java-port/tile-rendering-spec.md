@@ -10,10 +10,12 @@
 > branches), flippable-tile mirroring in `TigArt.draw` (`tig_art_blit`),
 > `SectorFile` (.sec tile layer), `Location` (iso math), `MapWorldScreen`,
 > `ScreenManager`. Tools: `tools.MapLister`, `tools.SecDump`, `tools.TileEdgeCheck`.
-> Tests: `TileRenderingTest`. **Remaining: FACADE ids (type 11) in the tile array
-> — cliff/mountain faces, currently unresolved; then objects / roofs / lighting /
-> walls, then multi-sector scrolling.** Note: no `maps\*\map.prp` ship in the base
-> archives — only `terrain\` templates, so real map loading needs module data.
+> `facade` resolution (cliff/mountain faces in the tile layer, `art\Facade\*`).
+> Tests: `TileRenderingTest`, `ArtIdTest`. **Remaining: sprite offset/hotspot in
+> the draw path (facades/objects currently drawn flat), then objects / roofs /
+> lighting / walls, then multi-sector scrolling.** Note: no `maps\*\map.prp` ship
+> in the base archives — only `terrain\` templates, so real map loading needs
+> module data. Mountain sectors sit on real `Blk` black-terrain (not holes).
 >
 > Goal: load a real `.sec` sector file from the `.dat` archives and render its
 > terrain tiles in the correct isometric layout, reachable from the menu's
