@@ -15,8 +15,9 @@ import com.arcanum.ce.tig.mes.Mes;
  * {@link #install()} so {@link TigArt#buildPath} resolves non-system art.
  *
  * Faithful for: critter, interface, scenery, container, monster, unique_npc,
- * eye_candy, and tile (base terrain; see {@link TileArtResolver}). The remaining
- * {@code a_name_*}-driven types (wall, portal, item, light, roof, facade) and
+ * eye_candy, facade (cliff/mountain faces in the tile layer), and tile (base
+ * terrain + edge blends; see {@link TileArtResolver}). The remaining
+ * {@code a_name_*}-driven types (wall, portal, item, light, roof) and
  * {@code name_normalize_aid}'s missing-art fallback remain TODO; those ids
  * resolve to null (the caller falls back).
  */
@@ -46,6 +47,7 @@ public final class NameResolver implements ArtPathResolver {
     private int monsterMes = Mes.INVALID_HANDLE;
     private int uniqueNpcMes = Mes.INVALID_HANDLE;
     private int eyeCandyMes = Mes.INVALID_HANDLE;
+    private String[] facadeNames;           // null if facadename.mes is unavailable
     private TileArtResolver tileResolver;   // null if tilename.mes is unavailable
     private boolean initialized;
 
@@ -69,6 +71,11 @@ public final class NameResolver implements ArtPathResolver {
         monsterMes = Mes.load("art\\monster\\monster.mes");
         uniqueNpcMes = Mes.load("art\\unique_npc\\unique_npc.mes");
         eyeCandyMes = Mes.load("art\\eye_candy\\eye_candy.mes");
+        int facadeMes = Mes.load("art\\facade\\facadename.mes");
+        if (facadeMes != Mes.INVALID_HANDLE) {
+            java.util.List<String> names = Mes.valuesInOrder(facadeMes);
+            facadeNames = names != null ? names.toArray(new String[0]) : null;
+        }
         TileNames tileNames = TileNames.load();
         tileResolver = tileNames != null ? new TileArtResolver(tileNames) : null;
         // The C engine requires all to load; we accept whatever is present so the
@@ -114,8 +121,16 @@ public final class NameResolver implements ArtPathResolver {
                 return "art\\eye_candy\\" + s + "_"
                         + EYE_CANDY_TYPE_CODES[ArtId.eyeCandyType(aid)] + ".art";
             }
+            case ArtId.TYPE_FACADE: {
+                // build_facade_file_name: art\Facade\<name>.art, name by facade num.
+                int num = ArtId.facadeNum(aid);
+                if (facadeNames == null || num < 0 || num >= facadeNames.length) {
+                    return null;
+                }
+                return "art\\Facade\\" + facadeNames[num] + ".art";
+            }
             default:
-                return null;   // tile/wall/portal/item/light/roof/facade: TODO
+                return null;   // wall/portal/item/light/roof: TODO
         }
     }
 

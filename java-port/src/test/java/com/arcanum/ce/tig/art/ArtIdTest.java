@@ -42,4 +42,25 @@ class ArtIdTest {
         assertEquals(1, ArtId.palette(id));
         assertEquals(0, ArtId.num(id));                 // critter num is always 0
     }
+
+    @Test
+    void facadeIdDecodesNumFrameAndType() {
+        // tig_art_facade_id_create layout: num split low(<<17,8 bits)+high(bit 27),
+        // frame <<1 (10 bits), rotation always 0.
+        int low = facadeId(17, 5);                       // num 17 (< 256), frame 5
+        assertEquals(ArtId.TYPE_FACADE, ArtId.type(low));
+        assertEquals(17, ArtId.facadeNum(low));
+        assertEquals(5, ArtId.frame(low));
+        assertEquals(0, ArtId.rotation(low));
+
+        int high = facadeId(300, 0);                     // num 300 needs the high bit
+        assertEquals(300, ArtId.facadeNum(high));
+    }
+
+    private static int facadeId(int num, int frame) {
+        return (ArtId.TYPE_FACADE << 28)
+                | ((num < 256 ? 0 : 1) << ArtId.FACADE_ID_NUM_HIGH_SHIFT)
+                | ((num & 0xFF) << ArtId.FACADE_ID_NUM_LOW_SHIFT)
+                | ((frame & (ArtId.FACADE_ID_MAX_FRAME - 1)) << ArtId.FACADE_ID_FRAME_SHIFT);
+    }
 }

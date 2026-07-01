@@ -108,4 +108,9 @@ public final class MesFile {
     public Map<Integer, String> entries() {
         return new HashMap<>(entries);
     }
+
+    /** Entry texts in ascending message-number order (cf. mes_search + find_next). */
+    public java.util.List<String> valuesInNumberOrder() {
+        return new java.util.ArrayList<>(new TreeMap<>(entries).values());
+    }
 }

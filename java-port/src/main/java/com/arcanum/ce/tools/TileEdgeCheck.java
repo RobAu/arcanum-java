@@ -37,6 +37,16 @@ public final class TileEdgeCheck {
         }
         System.out.println("sector: " + path);
 
+        String probe = System.getProperty("arcanum.probe");   // "x,y"
+        if (probe != null && probe.matches("\\d+,\\d+")) {
+            String[] xy = probe.split(",");
+            int px = Integer.parseInt(xy[0]);
+            int py = Integer.parseInt(xy[1]);
+            int aid = sec.tileAt(px, py);
+            System.out.printf("probe (%d,%d): aid=0x%08X type=%d -> %s%n",
+                    px, py, aid, ArtId.type(aid), TigArt.buildPath(aid));
+        }
+
         int base = 0;
         int blend = 0;
         int blendOk = 0;
@@ -47,12 +57,22 @@ public final class TileEdgeCheck {
         TreeMap<String, Integer> missingExamples = new TreeMap<>();
         TreeMap<String, Integer> okExamples = new TreeMap<>();
         int nonTile = 0;
+        int facadeOk = 0;
+        int facadeMissing = 0;
         long sumX = 0;
         long sumY = 0;
         for (int i = 0; i < SectorFile.TILE_COUNT; i++) {
             int aid = sec.tileArtIds[i];
             if (ArtId.type(aid) != ArtId.TYPE_TILE) {
-                nonTile++;   // e.g. FACADE cliff faces — resolved elsewhere
+                nonTile++;   // e.g. FACADE cliff faces
+                if (ArtId.type(aid) == ArtId.TYPE_FACADE) {
+                    String fp = TigArt.buildPath(aid);
+                    if (fp != null && TigFile.exists(fp, null)) {
+                        facadeOk++;
+                    } else {
+                        facadeMissing++;
+                    }
+                }
                 continue;
             }
             if (ArtId.tileNum1(aid) == ArtId.tileNum2(aid)) {
@@ -88,8 +108,8 @@ public final class TileEdgeCheck {
                 okFlip, blendOk, missFlip, blendMissing);
 
         System.out.printf("tiles: %d base, %d blend, %d non-tile (facade/etc)  "
-                + "(blend art: %d OK, %d MISSING)%n",
-                base, blend, nonTile, blendOk, blendMissing);
+                + "(blend art: %d OK, %d MISSING; facade art: %d OK, %d MISSING)%n",
+                base, blend, nonTile, blendOk, blendMissing, facadeOk, facadeMissing);
         if (blend > 0) {
             System.out.printf("blend centroid tile: (%d, %d)%n", sumX / blend, sumY / blend);
         }

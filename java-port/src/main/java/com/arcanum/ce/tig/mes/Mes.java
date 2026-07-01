@@ -85,4 +85,10 @@ public final class Mes {
         MesFile mf = file(handle);
         return mf != null ? mf.count() : 0;
     }
+
+    /** Entry texts in ascending message-number order, or null if the handle is bad. */
+    public static java.util.List<String> valuesInOrder(int handle) {
+        MesFile mf = file(handle);
+        return mf != null ? mf.valuesInNumberOrder() : null;
+    }
 }

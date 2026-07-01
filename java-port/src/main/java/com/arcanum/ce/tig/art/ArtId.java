@@ -53,6 +53,8 @@ public final class ArtId {
 
     static final int FACADE_ID_MAX_FRAME = 1024;
     static final int FACADE_ID_FRAME_SHIFT = 1;
+    static final int FACADE_ID_NUM_LOW_SHIFT = 17;
+    static final int FACADE_ID_NUM_HIGH_SHIFT = 27;
 
     static final int UNIQUE_NPC_ID_MAX_NUM = 256;
     static final int UNIQUE_NPC_ID_NUM_SHIFT = 20;
@@ -274,6 +276,15 @@ public final class ArtId {
     /** tig_art_tile_id_flippable_get (TILE case): both flippable bits set. */
     public static boolean tileFlippable(int artId) {
         return tileFlippable1(artId) != 0 && tileFlippable2(artId) != 0;
+    }
+
+    /** tig_art_facade_id_num_get: facade name index (8 low bits + a high bit). */
+    public static int facadeNum(int artId) {
+        int num = (artId >>> FACADE_ID_NUM_LOW_SHIFT) & 0xFF;
+        if ((artId & (1 << FACADE_ID_NUM_HIGH_SHIFT)) != 0) {
+            num += 256;
+        }
+        return num;
     }
 
     /** tig_art_id_flags_get for TILE/WALL/PORTAL/ROOF: low nibble. */
