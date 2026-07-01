@@ -69,4 +69,16 @@ public final class Location {
     public static int screenY(long loc, int originY) {
         return originY + 20 * (int) (getY(loc) + getX(loc));
     }
+
+    /**
+     * Inverse of {@link #screenX}/{@link #screenY}: the tile location under a
+     * screen pixel (location_at, ISOMETRIC), with floor division matching the C.
+     */
+    public static long locationAt(int sx, int sy, int originX, int originY) {
+        int dy = sy - originY;
+        int dx = (sx - originX) >> 1;
+        int x = Math.floorDiv(dy - dx, 40);
+        int y = Math.floorDiv(dy + dx, 40);
+        return make(x, y);
+    }
 }
