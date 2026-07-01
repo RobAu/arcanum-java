@@ -9,6 +9,8 @@ import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.arcanum.ce.game.Location;
 import com.arcanum.ce.game.Player;
 import com.arcanum.ce.game.SectorFile;
+import com.arcanum.ce.game.Tile;
+import com.arcanum.ce.game.TileNames;
 import com.arcanum.ce.tig.TigArt;
 
 /**
@@ -34,6 +36,7 @@ public final class MapWorldScreen implements Screen {
 
     private final String sectorPath;
     private SectorFile sector;
+    private TileNames tileNames;      // for walkability; null → nothing blocks
     private Player player;
     private int originX;
     private int originY;
@@ -52,6 +55,7 @@ public final class MapWorldScreen implements Screen {
     @Override
     public void create() {
         sector = SectorFile.load(sectorPath);
+        tileNames = TileNames.load();
         int spawnX = N / 2;
         int spawnY = N / 2;
         String spawn = System.getProperty("arcanum.spawn");   // "x,y" (debug/verify)
@@ -141,19 +145,31 @@ public final class MapWorldScreen implements Screen {
             player.setAnim(Player.ANIM_STAND);
             return;
         }
-        step(dir);
+        // A blocked click target is unreachable head-on: give up so we don't
+        // spin in place pushing against the wall.
+        if (!step(dir) && targetX >= 0) {
+            targetX = -1;
+            targetY = -1;
+        }
     }
 
-    /** Move one tile in {@code dir} if it stays in the sector; face that way. */
-    private void step(int dir) {
+    /**
+     * Try to move one tile in {@code dir}; always face that way. Returns false
+     * (and stays put) if the target tile is off-sector or impassable terrain.
+     */
+    private boolean step(int dir) {
         player.setRotation(dir);
-        player.setAnim(Player.ANIM_WALK);
         int nx = player.x() + DIR_DX[dir];
         int ny = player.y() + DIR_DY[dir];
-        if (nx >= 0 && nx < N && ny >= 0 && ny < N) {
+        if (nx >= 0 && nx < N && ny >= 0 && ny < N
+                && !Tile.isBlocking(sector.tileAt(nx, ny), tileNames)) {
+            player.setAnim(Player.ANIM_WALK);
             player.setTile(nx, ny);
             cooldown = STEP_COOLDOWN_FRAMES;
+            return true;
         }
+        player.setAnim(Player.ANIM_STAND);
+        return false;
     }
 
     /** Facing direction from held movement keys, or -1 if none. */

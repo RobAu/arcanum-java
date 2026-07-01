@@ -112,6 +112,29 @@ class TileRenderingTest {
     }
 
     @Test
+    void parsesTerrainFlagCharacters() {
+        // load_tile_names: after '/', b -> BLOCK, f -> BLOCK|FLYABLE; s/i/n/p ignored.
+        assertEquals(0, TileNames.parseFlags("grs"));                 // no slash
+        assertEquals(0x01, TileNames.parseFlags("dwr/b 3"));          // block (deep water)
+        assertEquals(0x05, TileNames.parseFlags("mtn/f 0"));          // block | flyable
+        assertEquals(0, TileNames.parseFlags("grs/sn 2"));            // sinkable+natural
+        assertEquals(0x01, TileNames.parseFlags("xxx/nb 1"));         // natural + block
+    }
+
+    @Test
+    void facadeBlocksUnlessWalkable() {
+        // tile_is_blocking: a facade blocks iff its walkable bit (low bit) is clear.
+        int cliff = (ArtId.TYPE_FACADE << 28);                       // walkable bit 0
+        int bridge = (ArtId.TYPE_FACADE << 28) | 1;                  // walkable bit 1
+        assertEquals(true, Tile.isBlocking(cliff, null));
+        assertEquals(false, Tile.isBlocking(bridge, null));
+        // Plain ground tiles (no flags) never block.
+        assertEquals(false, Tile.isBlocking(0x010401C0,
+                TileNames.of(new String[] {"dg1"}, new String[0],
+                        new String[0], new String[0])));
+    }
+
+    @Test
     void parsesSectorTileLayer() {
         // A minimal .sec image: 0 lights, then 4096 sequential tile ids.
         ByteBuffer b = ByteBuffer.allocate(4 + SectorFile.TILE_COUNT * 4)

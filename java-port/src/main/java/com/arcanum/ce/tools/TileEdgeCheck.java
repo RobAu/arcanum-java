@@ -43,8 +43,10 @@ public final class TileEdgeCheck {
             int px = Integer.parseInt(xy[0]);
             int py = Integer.parseInt(xy[1]);
             int aid = sec.tileAt(px, py);
-            System.out.printf("probe (%d,%d): aid=0x%08X type=%d -> %s%n",
-                    px, py, aid, ArtId.type(aid), TigArt.buildPath(aid));
+            com.arcanum.ce.game.TileNames tn = com.arcanum.ce.game.TileNames.load();
+            System.out.printf("probe (%d,%d): aid=0x%08X type=%d blocking=%b -> %s%n",
+                    px, py, aid, ArtId.type(aid),
+                    com.arcanum.ce.game.Tile.isBlocking(aid, tn), TigArt.buildPath(aid));
         }
 
         int base = 0;

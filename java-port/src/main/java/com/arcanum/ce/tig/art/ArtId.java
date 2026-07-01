@@ -287,6 +287,11 @@ public final class ArtId {
         return num;
     }
 
+    /** tig_art_facade_id_walkable_get: low bit (a cliff face is not walkable). */
+    public static boolean facadeWalkable(int artId) {
+        return (artId & 1) != 0;
+    }
+
     /** tig_art_id_flags_get for TILE/WALL/PORTAL/ROOF: low nibble. */
     public static int tileFlags(int artId) {
         return artId & 0xF;
