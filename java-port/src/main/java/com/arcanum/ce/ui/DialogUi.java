@@ -9,46 +9,68 @@ import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.Pixmap;
 import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.graphics.g2d.BitmapFont;
-import com.badlogic.gdx.graphics.g2d.GlyphLayout;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 
 import com.arcanum.ce.game.DialogFile;
+import com.arcanum.ce.tig.font.TigFontRenderer;
 
 /**
- * The conversation overlay: an NPC line and the player's selectable responses,
- * driven by a parsed {@link DialogFile}.
+ * The conversation overlay, following how the engine actually presents dialog
+ * ({@code dialog_ui.c} + {@code tb.c}):
  *
- * <p>Flow (cf. {@code dialog.c}): an NPC line is shown, the consecutive PC
- * entries after it are its options, and picking one jumps to that option's
- * {@code responseVal} — which is the next NPC line. A jump of 0 ends the
- * conversation.
+ * <ul>
+ *   <li>The NPC's line is a <b>text bubble</b> floating above the speaker
+ *       ({@code dialog_ui_npc_say} → {@code tb_add}). There is no bubble art —
+ *       {@code tb_background_color} is the colour <i>key</i>, so a bubble is just
+ *       floating text: font interface art <b>229</b>, {@code TIG_FONT_CENTERED |
+ *       TIG_FONT_SHADOW}, coloured per {@code tb_colors} (white for
+ *       {@code TB_TYPE_WHITE}), wrapped to {@code TEXT_BUBBLE_WIDTH} = 200px,
+ *       placed at {@code TB_POS_TOP} relative to the object.</li>
+ *   <li>The player's responses go to the interface bar
+ *       ({@code intgame_dialog_set_option}). {@code intgame} is not ported, so
+ *       they are listed in a panel along the bottom — <b>this part is our own
+ *       layout, not the original's.</b></li>
+ * </ul>
  *
- * <p>Responses are filtered by intelligence exactly as the engine does
- * ({@code dialog.c:1348}): {@code iq < 0} requires {@code intelligence <= -iq}
- * (the dumb lines), {@code iq >= 0} requires {@code intelligence >= iq}.
+ * <p>Flow: an NPC line is shown, the consecutive PC entries after it are its
+ * options, and choosing one jumps to that option's {@code responseVal} (the next
+ * NPC line). A jump of 0 ends the conversation. Responses are filtered by
+ * intelligence exactly as {@code dialog.c:1348} does: {@code iq < 0} requires
+ * {@code intelligence <= -iq} (the dumb lines), {@code iq >= 0} requires
+ * {@code intelligence >= iq}.
  *
- * <p><b>Approximation:</b> each entry also carries a {@code conditions} test
- * (e.g. {@code re62} = reaction, {@code gf2004} = global flag) and an
- * {@code actions} effect (set flags, advance quests). Evaluating either needs
- * the script VM, which is not ported — so conditions are <b>ignored</b> (every
- * IQ-eligible response is offered) and actions are <b>not applied</b>. Lines
- * gated on story state may therefore appear out of context.
+ * <p><b>Approximation:</b> each entry carries a {@code conditions} test
+ * ({@code re62} = reaction, {@code gf2004} = global flag) and an {@code actions}
+ * effect (set flags, advance quests). Both need the script VM, which is not
+ * ported — so conditions are <b>ignored</b> (every IQ-eligible response is
+ * offered) and actions are <b>not applied</b>. Story-gated lines can therefore
+ * appear out of context.
  *
  * <p>Input: {@code 1..9} or click a response; {@code Esc} leaves.
  */
 public final class DialogUi {
 
+    /** tb.c: the text bubble font is interface art 229. */
+    private static final int BUBBLE_FONT_ART_NUM = 229;
+    /** tb.c: TEXT_BUBBLE_WIDTH. */
+    private static final int BUBBLE_WIDTH = 200;
+    /** Gap between the speaker's anchor and the bottom of the bubble. */
+    private static final int BUBBLE_GAP = 24;
+    /** TIG_FONT_SHADOW: a 1px black drop shadow. */
+    private static final int SHADOW = 1;
+
     /** Default PC intelligence until a real character sheet exists. */
     private static final int DEFAULT_INTELLIGENCE = 8;
 
-    private static final float PANEL_HEIGHT_FRACTION = 0.42f;
-    private static final int PAD = 18;
-    private static final int LINE_GAP = 6;
+    private static final int PAD = 16;
+    private static final int LINE_GAP = 5;
 
-    private static final Color PANEL_BG = new Color(0.05f, 0.04f, 0.03f, 0.92f);
+    /** tb_colors[TB_TYPE_WHITE]. */
+    private static final Color BUBBLE_COLOR = new Color(1f, 1f, 1f, 1f);
+    private static final Color SHADOW_COLOR = new Color(0f, 0f, 0f, 1f);
+    private static final Color PANEL_BG = new Color(0.05f, 0.04f, 0.03f, 0.90f);
     private static final Color PANEL_EDGE = new Color(0.45f, 0.36f, 0.22f, 1f);
     private static final Color NAME_COLOR = new Color(0.93f, 0.80f, 0.45f, 1f);
-    private static final Color NPC_COLOR = new Color(0.90f, 0.88f, 0.82f, 1f);
     private static final Color OPTION_COLOR = new Color(0.62f, 0.74f, 0.86f, 1f);
     private static final Color OPTION_HOVER = new Color(1f, 1f, 1f, 1f);
     private static final Color HINT_COLOR = new Color(0.55f, 0.52f, 0.47f, 1f);
@@ -58,10 +80,11 @@ public final class DialogUi {
     private final List<DialogFile.Entry> options = new ArrayList<>();
     private String npcName = "";
     private int intelligence = DEFAULT_INTELLIGENCE;
-    private boolean female;                         // PC gender (picks the NPC's female line)
+    private boolean female;                         // PC gender: picks the NPC's female line
 
+    private TigFontRenderer font;                   // real Arcanum face; null -> BitmapFont
+    private boolean fontLoadAttempted;
     private Texture blank;                          // 1x1, tinted for panels
-    private final GlyphLayout layout = new GlyphLayout();
     // Screen-space rows of the drawn options, for click hit-testing.
     private final List<float[]> optionRects = new ArrayList<>();
 
@@ -120,7 +143,7 @@ public final class DialogUi {
         }
     }
 
-    /** dialog.c:1348 — negative iq is a maximum, non-negative is a minimum. */
+    /** dialog.c:1348 -- negative iq is a maximum, non-negative is a minimum. */
     private boolean passesIq(int iq) {
         return (iq < 0 && intelligence <= -iq) || (iq >= 0 && intelligence >= iq);
     }
@@ -173,58 +196,166 @@ public final class DialogUi {
         return -1;
     }
 
-    /** Draw the overlay. Call inside an active batch, after the world. */
-    public void render(SpriteBatch batch, BitmapFont font, int width, int height) {
+    /**
+     * Draw the overlay inside an active batch, after the world.
+     *
+     * @param speakerX screen x of the speaking NPC (its tile anchor)
+     * @param speakerY screen y of the speaking NPC, top-left origin; the bubble
+     *                 floats above this
+     */
+    public void render(SpriteBatch batch, BitmapFont fallback, int width, int height,
+                       float speakerX, float speakerY) {
         if (!isActive()) {
             return;
         }
+        ensureFont();
         ensureBlank();
         optionRects.clear();
 
-        int panelH = (int) (height * PANEL_HEIGHT_FRACTION);
-        int panelY = 0;                                   // libGDX y-up: bottom strip
-        fill(batch, 0, panelY, width, panelH, PANEL_BG);
-        fill(batch, 0, panelY + panelH - 2, width, 2, PANEL_EDGE);
+        drawBubble(batch, fallback, width, height, speakerX, speakerY);
+        drawOptions(batch, fallback, width, height);
+    }
 
-        float textW = width - 2f * PAD;
-        float y = panelY + panelH - PAD;                  // draw downward from the top edge
+    /** The NPC's line: centred, shadowed, wrapped to 200px, floating above them. */
+    private void drawBubble(SpriteBatch batch, BitmapFont fallback, int width, int height,
+                            float speakerX, float speakerY) {
+        List<String> lines = wrap(clean(current.text(female)), BUBBLE_WIDTH, fallback);
+        int lh = lineHeight(fallback);
+        float top = speakerY - BUBBLE_GAP - lines.size() * lh;
 
-        // Speaker.
-        font.setColor(NAME_COLOR);
-        layout.setText(font, npcName.isEmpty() ? "???" : npcName);
-        font.draw(batch, layout, PAD, y);
-        y -= layout.height + LINE_GAP * 2;
+        for (int i = 0; i < lines.size(); i++) {
+            String line = lines.get(i);
+            float w = measure(line, fallback);
+            float x = speakerX - w / 2f;                    // TIG_FONT_CENTERED
+            float y = top + i * lh;
+            // Keep the bubble on screen rather than letting it slide off the edge.
+            x = Math.max(2, Math.min(x, width - w - 2));
+            y = Math.max(2, y);
+            drawText(batch, fallback, line, x + SHADOW, y + SHADOW, height, SHADOW_COLOR);
+            drawText(batch, fallback, line, x, y, height, BUBBLE_COLOR);
+        }
+    }
 
-        // The NPC's line (wrapped).
-        font.setColor(NPC_COLOR);
-        layout.setText(font, clean(current.text(female)), NPC_COLOR, textW, -1, true);
-        font.draw(batch, layout, PAD, y);
-        y -= layout.height + LINE_GAP * 3;
+    /**
+     * The player's responses. The original puts these in the interface bar
+     * (intgame_dialog_set_option); intgame is not ported, so this panel is ours.
+     */
+    private void drawOptions(SpriteBatch batch, BitmapFont fallback, int width, int height) {
+        int lh = lineHeight(fallback);
+        int rows = Math.max(1, options.size());
+        int panelH = PAD * 3 + lh + rows * (lh + LINE_GAP);
+        panelH = Math.min(panelH, (int) (height * 0.45f));
 
-        // Player responses.
+        fill(batch, 0, 0, width, panelH, PANEL_BG);
+        fill(batch, 0, panelH - 2, width, 2, PANEL_EDGE);
+
+        // Draw downward from the panel's top edge (screen coords are top-left).
+        float y = height - panelH + PAD;
+
+        drawText(batch, fallback, npcName.isEmpty() ? "???" : npcName,
+                PAD, y, height, NAME_COLOR);
+        y += lh + LINE_GAP;
+
         if (options.isEmpty()) {
-            font.setColor(HINT_COLOR);
-            font.draw(batch, "[no available response - Esc to leave]", PAD, y);
+            drawText(batch, fallback, "[no available response - Esc to leave]",
+                    PAD, y, height, HINT_COLOR);
             return;
         }
 
         int hovered = hoveredOption();
         for (int i = 0; i < options.size(); i++) {
-            DialogFile.Entry o = options.get(i);
+            String s = (i + 1) + ". " + clean(options.get(i).text);
+            // One row per response; long lines are clipped rather than wrapped so
+            // the numbering stays scannable.
+            s = fit(s, width - PAD * 3, fallback);
             Color c = (i == hovered) ? OPTION_HOVER : OPTION_COLOR;
-            String s = (i + 1) + ". " + clean(o.text);
-            layout.setText(font, s, c, textW - PAD, -1, true);
-            font.draw(batch, layout, PAD * 2f, y);
-
-            // Record the row for hit-testing (convert y-up -> screen y-down).
-            float top = height - y;
-            optionRects.add(new float[] {PAD * 2f, top, textW - PAD, layout.height});
-
-            y -= layout.height + LINE_GAP;
-            if (y < panelY + PAD) {
-                break;                                    // out of room; rest are clipped
+            drawText(batch, fallback, s, PAD * 2f, y, height, c);
+            optionRects.add(new float[] {PAD * 2f, y, width - PAD * 3f, lh});
+            y += lh + LINE_GAP;
+            if (y > height - PAD) {
+                break;
             }
         }
+    }
+
+    // -- font plumbing: prefer the real Arcanum face, fall back to the BitmapFont --
+
+    private void ensureFont() {
+        if (!fontLoadAttempted) {
+            fontLoadAttempted = true;
+            font = TigFontRenderer.load(BUBBLE_FONT_ART_NUM);
+        }
+    }
+
+    private int lineHeight(BitmapFont fallback) {
+        return font != null ? font.lineHeight() : (int) fallback.getLineHeight();
+    }
+
+    private float measure(String s, BitmapFont fallback) {
+        if (font != null) {
+            return font.measureWidth(s);
+        }
+        com.badlogic.gdx.graphics.g2d.GlyphLayout gl =
+                new com.badlogic.gdx.graphics.g2d.GlyphLayout(fallback, s);
+        return gl.width;
+    }
+
+    /** Draw one line with its top-left at (x, yTop) in top-left-origin space. */
+    private void drawText(SpriteBatch batch, BitmapFont fallback, String s,
+                          float x, float yTop, int height, Color tint) {
+        if (font != null) {
+            font.draw(batch, s, x, yTop, height, tint);
+            return;
+        }
+        fallback.setColor(tint);
+        fallback.draw(batch, s, x, height - yTop - fallback.getLineHeight() * 0.25f);
+        fallback.setColor(Color.WHITE);
+    }
+
+    /** Greedy word wrap to {@code maxWidth} px. */
+    private List<String> wrap(String s, int maxWidth, BitmapFont fallback) {
+        List<String> out = new ArrayList<>();
+        StringBuilder line = new StringBuilder();
+        for (String word : s.split("\\s+")) {
+            if (word.isEmpty()) {
+                continue;
+            }
+            String candidate = line.length() == 0 ? word : line + " " + word;
+            if (measure(candidate, fallback) <= maxWidth || line.length() == 0) {
+                line.setLength(0);
+                line.append(candidate);
+            } else {
+                out.add(line.toString());
+                line.setLength(0);
+                line.append(word);
+            }
+        }
+        if (line.length() > 0) {
+            out.add(line.toString());
+        }
+        if (out.isEmpty()) {
+            out.add("");
+        }
+        return out;
+    }
+
+    /** Truncate with an ellipsis to fit {@code maxWidth} px. */
+    private String fit(String s, float maxWidth, BitmapFont fallback) {
+        if (measure(s, fallback) <= maxWidth) {
+            return s;
+        }
+        String tail = "...";
+        int lo = 0;
+        int hi = s.length();
+        while (lo < hi) {
+            int mid = (lo + hi + 1) >>> 1;
+            if (measure(s.substring(0, mid) + tail, fallback) <= maxWidth) {
+                lo = mid;
+            } else {
+                hi = mid - 1;
+            }
+        }
+        return s.substring(0, lo) + tail;
     }
 
     private void ensureBlank() {
@@ -244,7 +375,7 @@ public final class DialogUi {
         batch.setColor(Color.WHITE);
     }
 
-    /** Dialog text carries hard line breaks and double spaces; normalise for wrapping. */
+    /** Dialog text carries hard breaks and double spaces; normalise for wrapping. */
     private static String clean(String s) {
         return s.replace('\n', ' ').replace('\r', ' ').trim();
     }
