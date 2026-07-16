@@ -242,9 +242,22 @@ public final class DialogUi {
      */
     private void drawOptions(SpriteBatch batch, BitmapFont fallback, int width, int height) {
         int lh = lineHeight(fallback);
-        int rows = Math.max(1, options.size());
-        int panelH = PAD * 3 + lh + rows * (lh + LINE_GAP);
-        panelH = Math.min(panelH, (int) (height * 0.45f));
+        float textW = width - PAD * 4f;          // room for the "N." gutter
+
+        // Wrap every option first: a response can be a full sentence, and clipping
+        // it makes the thing you are about to say unreadable. Measure the wrapped
+        // rows so the panel is exactly as tall as it needs to be.
+        List<List<String>> wrapped = new ArrayList<>();
+        int rows = 0;
+        for (DialogFile.Entry o : options) {
+            List<String> ls = wrap(clean(o.text), (int) textW, fallback);
+            wrapped.add(ls);
+            rows += ls.size();
+        }
+
+        int panelH = PAD * 3 + lh + rows * lh + Math.max(0, options.size() - 1) * LINE_GAP;
+        panelH = Math.max(panelH, PAD * 3 + lh * 2);
+        panelH = Math.min(panelH, (int) (height * 0.55f));
 
         fill(batch, 0, 0, width, panelH, PANEL_BG);
         fill(batch, 0, panelH - 2, width, 2, PANEL_EDGE);
@@ -264,16 +277,21 @@ public final class DialogUi {
 
         int hovered = hoveredOption();
         for (int i = 0; i < options.size(); i++) {
-            String s = (i + 1) + ". " + clean(options.get(i).text);
-            // One row per response; long lines are clipped rather than wrapped so
-            // the numbering stays scannable.
-            s = fit(s, width - PAD * 3, fallback);
+            List<String> ls = wrapped.get(i);
             Color c = (i == hovered) ? OPTION_HOVER : OPTION_COLOR;
-            drawText(batch, fallback, s, PAD * 2f, y, height, c);
-            optionRects.add(new float[] {PAD * 2f, y, width - PAD * 3f, lh});
-            y += lh + LINE_GAP;
+            float rowTop = y;
+
+            // "N." sits in the gutter so the wrapped body stays aligned under itself.
+            drawText(batch, fallback, (i + 1) + ".", PAD * 1.5f, y, height, c);
+            for (String line : ls) {
+                drawText(batch, fallback, line, PAD * 3f, y, height, c);
+                y += lh;
+            }
+            // The whole wrapped block is one click target.
+            optionRects.add(new float[] {PAD, rowTop, width - PAD * 2f, y - rowTop});
+            y += LINE_GAP;
             if (y > height - PAD) {
-                break;
+                break;                            // out of room; the rest are clipped
             }
         }
     }
@@ -337,25 +355,6 @@ public final class DialogUi {
             out.add("");
         }
         return out;
-    }
-
-    /** Truncate with an ellipsis to fit {@code maxWidth} px. */
-    private String fit(String s, float maxWidth, BitmapFont fallback) {
-        if (measure(s, fallback) <= maxWidth) {
-            return s;
-        }
-        String tail = "...";
-        int lo = 0;
-        int hi = s.length();
-        while (lo < hi) {
-            int mid = (lo + hi + 1) >>> 1;
-            if (measure(s.substring(0, mid) + tail, fallback) <= maxWidth) {
-                lo = mid;
-            } else {
-                hi = mid - 1;
-            }
-        }
-        return s.substring(0, lo) + tail;
     }
 
     private void ensureBlank() {

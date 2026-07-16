@@ -365,18 +365,24 @@ public final class MapWorldScreen implements Screen {
             return;
         }
 
+        // Keep each HUD line short enough to fit the window -- one long line ran
+        // off the right edge and lost whatever was at the end of it.
         font.setColor(Color.WHITE);
         long sec = player.sectorId();
         font.draw(batch, worldLabel + "   tile (" + player.x() + ", " + player.y()
-                + ")   sector " + sec + " (" + Location.sectorX(sec) + ", "
-                + Location.sectorY(sec) + ")   [WASD/arrows, click or hold LMB: move,"
-                + " click an object: identify/talk, Esc: menu]",
+                + ")   sector " + sec
+                + " (" + Location.sectorX(sec) + ", " + Location.sectorY(sec) + ")",
                 12, height - 12);
         font.draw(batch, "drawn " + drawnTiles + " tiles of " + visible.tileCount()
                 + " in view   sprites " + drawnSprites.size()
                 + "   sectors cached " + world.cachedSectorCount()
                 + " (loaded " + world.sectorLoads() + ", missing " + world.sectorMisses() + ")",
                 12, height - 30);
+        // Controls live along the bottom, out of the way of the scene.
+        font.setColor(Color.LIGHT_GRAY);
+        font.draw(batch, "WASD/arrows or hold LMB: move    click an object:"
+                + " identify/talk    Esc: menu", 12, 18);
+        font.setColor(Color.WHITE);
 
         drawHover(batch, font, height);
         drawPicked(batch, font, height);
