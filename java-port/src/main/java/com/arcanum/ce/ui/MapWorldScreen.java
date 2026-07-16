@@ -27,7 +27,8 @@ import com.arcanum.ce.tig.TigFile;
  * on its tile by the art hotspot ({@code object_get_rect}).
  *
  * <p>Controls: arrow keys / WASD walk (8 directions, camera follows); left-click
- * a tile to walk there; Escape or right-click returns to the menu. The sector
+ * a tile to walk there, or hold the left button to keep walking toward the
+ * cursor; Escape or right-click returns to the menu. The sector
  * is set by {@code -Darcanum.sector=<repository\path.sec>} (default: a wooded
  * template full of trees, so New Game opens into a populated scene).
  */
@@ -185,7 +186,8 @@ public final class MapWorldScreen implements Screen {
 
         font.setColor(Color.WHITE);
         font.draw(batch, sectorPath + "   tile (" + player.x() + ", " + player.y()
-                + ")   [WASD/arrows or click: move, Esc: menu]", 12, height - 12);
+                + ")   [WASD/arrows, click or hold LMB: move, Esc: menu]",
+                12, height - 12);
     }
 
     private void update() {
@@ -197,8 +199,10 @@ public final class MapWorldScreen implements Screen {
         // Drive the walk tween; the next step can't begin until it completes.
         player.advanceWalk(WALK_SPEED);
 
-        // A left-click (in the world) sets a walk-to target.
-        if (Gdx.input.justTouched()
+        // Left button sets a walk-to target, re-read every frame while it is held
+        // so the player keeps following the cursor; releasing leaves the last
+        // target set, so a single click still walks there and stops.
+        if (Gdx.input.isButtonPressed(Input.Buttons.LEFT)
                 && !Gdx.input.isButtonPressed(Input.Buttons.RIGHT)) {
             long t = Location.locationAt(Gdx.input.getX(), Gdx.input.getY(),
                     originX, originY);
