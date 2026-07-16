@@ -5,6 +5,7 @@ import java.io.File;
 import com.badlogic.gdx.ApplicationAdapter;
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.graphics.GL20;
+import com.badlogic.gdx.math.Matrix4;
 import com.badlogic.gdx.graphics.Pixmap;
 import com.badlogic.gdx.graphics.PixmapIO;
 import com.badlogic.gdx.graphics.g2d.BitmapFont;
@@ -54,6 +55,28 @@ public final class ArcanumGame extends ApplicationAdapter {
                 ScreenManager.push(new MapWorldScreen());
             }
         }
+    }
+
+    /**
+     * Keep one batch unit equal to one logical window pixel.
+     *
+     * <p>A {@link SpriteBatch} takes its projection from the window size when it
+     * is constructed and never updates it. Screens lay out (and hit-test the
+     * mouse) against the <em>current</em> {@code Gdx.graphics} size, so once the
+     * window is resized the two disagree: the picture keeps being drawn in the
+     * old space and stretched to fit, while {@link com.badlogic.gdx.Input#getX}
+     * reports the new space — the cursor and what it points at drift apart.
+     *
+     * <p>Re-projecting to the new logical size fixes both: drawing matches the
+     * window, and input coordinates (which are in logical pixels, y down) line up
+     * with the top-left-origin convention the screens already use. The GL
+     * viewport takes back-buffer pixels, which differ from logical ones on HiDPI.
+     */
+    @Override
+    public void resize(int width, int height) {
+        Gdx.gl.glViewport(0, 0, Gdx.graphics.getBackBufferWidth(),
+                Gdx.graphics.getBackBufferHeight());
+        batch.setProjectionMatrix(new Matrix4().setToOrtho2D(0, 0, width, height));
     }
 
     @Override
