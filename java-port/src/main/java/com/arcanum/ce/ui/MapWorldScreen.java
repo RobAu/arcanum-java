@@ -26,9 +26,17 @@ import com.arcanum.ce.tig.TigFile;
  * objects — scenery, walls, critters) depth-sorted with the player, each anchored
  * on its tile by the art hotspot ({@code object_get_rect}).
  *
+ * <p>Clicking an object identifies it: {@link #pick} finds what is under the
+ * cursor and {@link #identify} resolves its name and dialog script, shown as
+ * on-screen text. This is stage one of click-to-interact — there is no dialog UI
+ * yet, so the {@code .dlg} the object <em>would</em> open is printed instead.
+ * {@link #pick} approximates {@code target_pick_at_screen_xy} rather than porting
+ * it; see its javadoc for exactly what is and is not reproduced.
+ *
  * <p>Controls: arrow keys / WASD walk (8 directions, camera follows); left-click
- * a tile to walk there, or hold the left button to keep walking toward the
- * cursor; Escape or right-click returns to the menu. The sector
+ * empty ground to walk there, or hold the left button to keep walking toward the
+ * cursor; left-click an object to identify it instead of walking; hover any
+ * object to see its name. Escape or right-click returns to the menu. The sector
  * is set by {@code -Darcanum.sector=<repository\path.sec>} (default: a wooded
  * template full of trees, so New Game opens into a populated scene).
  */
@@ -58,11 +66,37 @@ public final class MapWorldScreen implements Screen {
     // inherit it from their prototype (obj_field_fetch), so without these the
     // majority of the scene has nothing to draw.
     private com.arcanum.ce.game.ProtoStore protos;
+    // Name + script tables for click-to-identify (description.c / oname.c /
+    // script_name.c). Null if the data isn't there; identify then says so.
+    private com.arcanum.ce.game.ObjectName names;
+    private com.arcanum.ce.game.ScriptName scriptNames;
     private Player player;
     private int originX;
     private int originY;
     private int targetX = -1;        // click-to-move target tile, -1 = none
     private int targetY = -1;
+    /** Last frame's draw list — what the user can actually see, so what they click. */
+    private java.util.List<Sprite> drawnSprites = java.util.Collections.emptyList();
+    /** The identify readout for the last picked object, top line first. */
+    private final java.util.List<String> pickedLines = new java.util.ArrayList<>();
+    /** True while the left button that went down on an object is still held. */
+    private boolean clickedObject;
+    /** The conversation overlay; active only while talking to someone. */
+    private final DialogUi dialogUi = new DialogUi();
+    /** Who we are talking to, so the bubble can float above them. */
+    private com.arcanum.ce.game.GameObject speaker;
+
+    /** dialog.c: conversations enter at line 1 unless a script says otherwise. */
+    private static final int DIALOG_ENTRY_LINE = 1;
+    /** -Darcanum.pick=x,y — force one pick at a screen point (headless/dev). */
+    private int[] forcedPick;
+
+    /** ObjectType names (obj.h), for the identify readout. */
+    private static final String[] TYPE_NAMES = {
+        "WALL", "PORTAL", "CONTAINER", "SCENERY", "PROJECTILE", "WEAPON", "AMMO",
+        "ARMOR", "GOLD", "FOOD", "SCROLL", "KEY", "KEY_RING", "WRITTEN", "GENERIC",
+        "PC", "NPC", "TRAP",
+    };
 
     public MapWorldScreen() {
         this(System.getProperty("arcanum.sector"));   // null → campaign start map
@@ -76,6 +110,10 @@ public final class MapWorldScreen implements Screen {
     public void create() {
         tileNames = TileNames.load();
         protos = com.arcanum.ce.game.ProtoStore.get();
+        // The identify chain: OBJ_F_DESCRIPTION -> description.mes for the display
+        // name, OBJ_F_SCRIPTS_IDX[SAP_DIALOG] -> num -> dlg\*.dlg for the dialog.
+        names = com.arcanum.ce.game.ObjectName.get(protos);
+        scriptNames = com.arcanum.ce.game.ScriptName.get();
         int spawnX = N / 2;
         int spawnY = N / 2;
 
@@ -98,6 +136,12 @@ public final class MapWorldScreen implements Screen {
             }
         }
         sector = SectorFile.load(sectorPath);
+
+        String forced = System.getProperty("arcanum.pick");   // "x,y" screen (debug/verify)
+        if (forced != null && forced.matches("\\d+,\\d+")) {
+            String[] xy = forced.split(",");
+            forcedPick = new int[] {Integer.parseInt(xy[0]), Integer.parseInt(xy[1])};
+        }
 
         String spawn = System.getProperty("arcanum.spawn");   // "x,y" (debug/verify)
         if (spawn != null && spawn.matches("\\d+,\\d+")) {
@@ -178,32 +222,128 @@ public final class MapWorldScreen implements Screen {
         addObjectSprites(sprites, mobiles);          // NPCs / critters / ground items
         // The player draws after any object sharing its tile (order = 1).
         sprites.add(new Sprite(player.x() + player.y(), player.x(), 1,
-                player.artId(frame), pbx + originX, pby + originY, 0, 0));
+                player.artId(frame), pbx + originX, pby + originY, 0, 0, null));
         sprites.sort(SPRITE_ORDER);
         for (Sprite s : sprites) {
             drawSprite(batch, s.artId, s.baseX, s.baseY, s.offX, s.offY, height);
         }
+        // Hand this frame's sprites to the next frame's input pass, so a click
+        // hit-tests exactly the pixels the player was looking at when they clicked.
+        drawnSprites = sprites;
+
+        // Headless/dev shortcut: -Darcanum.pick=<screenX>,<screenY> runs one pick
+        // at a fixed point, so the picker can be driven without a real mouse
+        // (cf. -Darcanum.hover on the main menu).
+        if (forcedPick != null && pickedLines.isEmpty()) {
+            Sprite s = pick(forcedPick[0], forcedPick[1]);
+            if (s != null) {
+                identify(s.obj);
+            } else {
+                pickedLines.add("nothing picked at (" + forcedPick[0] + ", "
+                        + forcedPick[1] + ")");
+            }
+        }
+
+        // A conversation owns the screen: its bubble floats over the speaker and
+        // the responses replace the identify readout.
+        if (dialogUi.isActive() && speaker != null) {
+            float[] anchor = speakerAnchor();
+            dialogUi.render(batch, font, width, height, anchor[0], anchor[1]);
+            return;
+        }
 
         font.setColor(Color.WHITE);
         font.draw(batch, sectorPath + "   tile (" + player.x() + ", " + player.y()
-                + ")   [WASD/arrows, click or hold LMB: move, Esc: menu]",
+                + ")   [WASD/arrows, click or hold LMB: move, click an object:"
+                + " identify/talk, Esc: menu]",
                 12, height - 12);
+
+        drawHover(batch, font, height);
+        drawPicked(batch, font, height);
+    }
+
+    /** The name of whatever is under the cursor, drawn beside it. */
+    private void drawHover(SpriteBatch batch, BitmapFont font, int height) {
+        if (Gdx.input == null || names == null) {
+            return;
+        }
+        Sprite s = pick(Gdx.input.getX(), Gdx.input.getY());
+        if (s == null) {
+            return;
+        }
+        String name = names.name(s.obj);
+        if (name == null) {
+            return;
+        }
+        font.setColor(Color.YELLOW);
+        // Screen space is top-down; libGDX text draws bottom-up from its baseline.
+        font.draw(batch, name, Gdx.input.getX() + 14,
+                height - Gdx.input.getY() - 4);
+    }
+
+    /** The identify readout for the last clicked object. */
+    private void drawPicked(SpriteBatch batch, BitmapFont font, int height) {
+        if (pickedLines.isEmpty()) {
+            return;
+        }
+        float y = 64 + (pickedLines.size() - 1) * 18;
+        for (int i = 0; i < pickedLines.size(); i++) {
+            font.setColor(i == 0 ? Color.YELLOW : Color.WHITE);
+            font.draw(batch, pickedLines.get(i), 12, y);
+            y -= 18;
+        }
     }
 
     private void update() {
-        handleBack();
         if (Gdx.input == null) {
+            handleBack();
             return;
         }
+
+        // A conversation takes the input: no walking, no re-picking, and Esc
+        // closes the conversation rather than leaving the map -- so this runs
+        // *before* handleBack and swallows the frame.
+        if (dialogUi.isActive()) {
+            dialogUi.update();
+            if (!dialogUi.isActive()) {
+                speaker = null;
+            }
+            player.setAnim(Player.ANIM_STAND);
+            targetX = -1;
+            targetY = -1;
+            return;
+        }
+
+        handleBack();
 
         // Drive the walk tween; the next step can't begin until it completes.
         player.advanceWalk(WALK_SPEED);
 
+        // An initial left-press ON an object identifies it instead of walking --
+        // the interaction wins over movement, and only on the press, so that
+        // holding the button afterwards does not re-identify every frame.
+        if (Gdx.input.isButtonJustPressed(Input.Buttons.LEFT)
+                && !Gdx.input.isButtonPressed(Input.Buttons.RIGHT)) {
+            Sprite hit = pick(Gdx.input.getX(), Gdx.input.getY());
+            if (hit != null) {
+                identify(hit.obj);
+                clickedObject = true;
+            } else {
+                clickedObject = false;
+                pickedLines.clear();
+            }
+        }
+        if (!Gdx.input.isButtonPressed(Input.Buttons.LEFT)) {
+            clickedObject = false;
+        }
+
         // Left button sets a walk-to target, re-read every frame while it is held
         // so the player keeps following the cursor; releasing leaves the last
-        // target set, so a single click still walks there and stops.
+        // target set, so a single click still walks there and stops. A press that
+        // landed on an object is an identify, not a walk, for as long as it is held.
         if (Gdx.input.isButtonPressed(Input.Buttons.LEFT)
-                && !Gdx.input.isButtonPressed(Input.Buttons.RIGHT)) {
+                && !Gdx.input.isButtonPressed(Input.Buttons.RIGHT)
+                && !clickedObject) {
             long t = Location.locationAt(Gdx.input.getX(), Gdx.input.getY(),
                     originX, originY);
             int tx = (int) Location.getX(t);
@@ -341,11 +481,12 @@ public final class MapWorldScreen implements Screen {
             sprites.add(new Sprite(ox + oy, ox, 0, aid,
                     Location.screenX(tl, originX), Location.screenY(tl, originY),
                     o.resolvedInt(OBJ_F_OFFSET_X, protos),
-                    o.resolvedInt(OBJ_F_OFFSET_Y, protos)));
+                    o.resolvedInt(OBJ_F_OFFSET_Y, protos), o));
         }
     }
 
     private final int[] hot = new int[2];
+    private final int[] wh = new int[2];
 
     /** Anchor an art on its tile: screen = tileScreen + offset + (40,20) − hotspot. */
     private void drawSprite(SpriteBatch batch, int artId, float baseX, float baseY,
@@ -353,6 +494,174 @@ public final class MapWorldScreen implements Screen {
         TigArt.frameHotspot(artId, hot);
         TigArt.draw(batch, artId, baseX + offX + 40 - hot[0],
                 baseY + offY + 20 - hot[1], height);
+    }
+
+    /**
+     * The front-most object whose drawn pixels contain the cursor, or null for
+     * empty ground.
+     *
+     * <h2>This approximates {@code target_pick_at_screen_xy} → {@code sub_4F28A0}
+     * ({@code target.c}); it is not a port of it.</h2>
+     *
+     * <p>{@code sub_4F28A0} is inseparable from the party/targeting subsystem,
+     * none of which is ported: it consults {@code player_get_local_pc_obj}, sets
+     * and clears {@code OF_CLICK_THROUGH} across {@code object_list_all_followers}
+     * and {@code object_list_party}, filters on the current {@code TGT_*} params
+     * ({@code TGT_OBJ_NO_SELF}, {@code TGT_NON_PARTY_CRITTERS},
+     * {@code TGT_OBJ_NO_ST_CRITTER_DEAD}), and falls back to
+     * {@code object_list_location} and then to a bare location target. Porting
+     * that means porting the party system first, so we hit-test the sprites this
+     * screen already builds instead.
+     *
+     * <p>What <em>is</em> reproduced is the geometry of its inner test,
+     * {@code sub_43D9F0} ({@code object.c:1792}), because that is the part that
+     * decides what the cursor is over:
+     * <ul>
+     * <li><b>Front-most first.</b> {@code sub_43D9F0} walks sectors, rows and
+     *     tiles in reverse ({@code for (row = num_rows - 1; row &gt;= 0; row--)}
+     *     …) and returns the first hit; we walk the depth-sorted draw list
+     *     backwards, which is the same near-to-far order.</li>
+     * <li><b>The rect.</b> {@code object_get_rect(obj, 0, &rect)} gives
+     *     {@code x = loc_x + offset_x + 40 - hot_x}, {@code y = loc_y + offset_y
+     *     + 20 - hot_y}, sized by the frame — exactly what {@link #drawSprite}
+     *     draws, so the pickable rect is the drawn rect by construction. The
+     *     bounds test is half-open, as the C's is.</li>
+     * <li><b>Alpha.</b> {@code !sub_502FD0(aid, test_x, test_y)} — a transparent
+     *     pixel does not pick. See {@link TigArt#isPickableAt}: the C's threshold
+     *     is palette index {@code < 2}, not just index 0.</li>
+     * </ul>
+     *
+     * <p>Knowingly left out, beyond the party/TGT filtering: {@code roof_hit_test},
+     * {@code object_type_visibility} and the {@code dword_5E2F88} flag filter, the
+     * {@code OBJ_F_BLIT_SCALE}/{@code OF_SHRUNK} rescale of the test point (this
+     * screen draws everything unscaled), the wall {@code OWAF_TRANS_*} exclusion,
+     * and the {@code flags & 0x01} ±2px sloppy-hit fallback.
+     */
+    private Sprite pick(int screenX, int screenY) {
+        // Reverse of the depth sort: nearest (last drawn, visually on top) first.
+        for (int i = drawnSprites.size() - 1; i >= 0; i--) {
+            Sprite s = drawnSprites.get(i);
+            if (s.obj == null) {
+                continue;                       // the player avatar is not a target
+            }
+            if (!TigArt.frameHotspot(s.artId, hot) || !TigArt.frameSize(s.artId, wh)) {
+                continue;                       // unresolved art has no rect
+            }
+            // object_get_rect: the same anchor drawSprite uses.
+            int rx = (int) (s.baseX + s.offX + 40 - hot[0]);
+            int ry = (int) (s.baseY + s.offY + 20 - hot[1]);
+            if (screenX < rx || screenY < ry
+                    || screenX >= rx + wh[0] || screenY >= ry + wh[1]) {
+                continue;
+            }
+            // A transparent pixel must not pick, so the cursor lands on the thing
+            // it looks like it is on rather than its bounding box.
+            if (TigArt.isPickableAt(s.artId, screenX - rx, screenY - ry)) {
+                return s;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Resolve what a picked object is and show it. A stepping stone: the dialog
+     * number and {@code .dlg} path are surfaced as text because there is no dialog
+     * UI yet ({@code .dlg} parsing and the dialog window are the next stage).
+     */
+    private void identify(com.arcanum.ce.game.GameObject o) {
+        pickedLines.clear();
+        if (names == null) {
+            pickedLines.add("no name tables (mes\\description.mes missing)");
+            return;
+        }
+        String display = names.name(o);
+        String internal = names.internalName(o);
+        pickedLines.add(display != null ? display : "<unnamed>");
+
+        StringBuilder detail = new StringBuilder();
+        detail.append(typeName(o.type));
+        if (internal != null) {
+            detail.append("   oname: ").append(internal);
+        }
+        detail.append("   name#").append(names.nameNum(o))
+                .append("  desc#").append(names.descriptionNum(o));
+        pickedLines.add(detail.toString());
+
+        // OBJ_F_SCRIPTS_IDX is sparse: SAP_DIALOG is a key, not an index.
+        com.arcanum.ce.game.Script dlg =
+                o.script(com.arcanum.ce.game.Sap.DIALOG, protos);
+        if (dlg == null) {
+            pickedLines.add("no SAP_DIALOG script");
+            return;
+        }
+        String path = scriptNames == null ? null : scriptNames.buildDlgName(dlg.num);
+        String exists = path != null && TigFile.exists(path, null)
+                ? " (exists)" : " (missing)";
+        pickedLines.add("SAP_DIALOG num " + dlg.num + " -> "
+                + (path == null ? "<not indexed>" : path + exists));
+
+        // ...and if that .dlg parses, actually open the conversation.
+        if (path == null) {
+            return;
+        }
+        com.arcanum.ce.game.DialogFile file = com.arcanum.ce.game.DialogFile.load(path);
+        if (file == null) {
+            pickedLines.add("dialog file did not parse");
+            return;
+        }
+        speaker = o;
+        dialogUi.start(file, DIALOG_ENTRY_LINE, display);
+        if (!dialogUi.isActive()) {
+            pickedLines.add("dialog has no line " + DIALOG_ENTRY_LINE);
+            speaker = null;
+        }
+    }
+
+    /**
+     * Where the speaker's text bubble should float: the tile centre horizontally,
+     * and the top of their sprite vertically (tb.c places bubbles relative to the
+     * object). Falls back to the tile anchor when the sprite is not in the last
+     * draw list.
+     */
+    private float[] speakerAnchor() {
+        long loc = speaker.location();
+        int sx = (int) (Location.getX(loc) & (N - 1));
+        int sy = (int) (Location.getY(loc) & (N - 1));
+        long tl = Location.make(sx, sy);
+        float x = Location.screenX(tl, originX) + 40;
+        float y = Location.screenY(tl, originY) + 20;
+        for (Sprite s : drawnSprites) {
+            if (s.obj == speaker) {
+                int[] hot = new int[2];
+                TigArt.frameHotspot(s.artId, hot);
+                // The sprite's drawn top edge (cf. drawSprite / object_get_rect).
+                y = s.baseY + s.offY + 20 - hot[1];
+                x = s.baseX + s.offX + 40 - hot[0]
+                        + spriteWidth(s.artId) / 2f;
+                break;
+            }
+        }
+        return new float[] {x, y};
+    }
+
+    private static float spriteWidth(int artId) {
+        String path = TigArt.buildPath(artId);
+        if (path == null) {
+            return 0;
+        }
+        com.arcanum.ce.tig.art.ArtFile art = TigArt.load(path);
+        if (art == null) {
+            return 0;
+        }
+        int rot = Math.min(com.arcanum.ce.tig.art.ArtId.rotation(artId),
+                art.numRotations - 1);
+        int frame = Math.min(com.arcanum.ce.tig.art.ArtId.frame(artId),
+                art.numFrames - 1);
+        return art.frames[rot][frame].width;
+    }
+
+    private static String typeName(int type) {
+        return type >= 0 && type < TYPE_NAMES.length ? TYPE_NAMES[type] : "type" + type;
     }
 
     /** One depth-sortable sprite (an object or the player) queued for drawing. */
@@ -365,9 +674,12 @@ public final class MapWorldScreen implements Screen {
         final float baseY;
         final int offX;
         final int offY;
+        /** The object this sprite draws, or null for the player avatar. */
+        final com.arcanum.ce.game.GameObject obj;
 
         Sprite(int depth, int tieX, int order, int artId,
-               float baseX, float baseY, int offX, int offY) {
+               float baseX, float baseY, int offX, int offY,
+               com.arcanum.ce.game.GameObject obj) {
             this.depth = depth;
             this.tieX = tieX;
             this.order = order;
@@ -376,6 +688,7 @@ public final class MapWorldScreen implements Screen {
             this.baseY = baseY;
             this.offX = offX;
             this.offY = offY;
+            this.obj = obj;
         }
     }
 

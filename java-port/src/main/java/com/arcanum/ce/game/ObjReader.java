@@ -132,8 +132,10 @@ public final class ObjReader {
             if (b.get() == 0) {
                 return null;
             }
-            readSizeableArray(b);
-            return "<array>";
+            // Every array type reads identically (sa_read_no_dealloc); keep the
+            // parsed array rather than discarding it, so sparse lookups by key
+            // are possible (SizeableArray.get -- OBJ_F_SCRIPTS_IDX needs this).
+            return SizeableArray.read(b);
         }
         case ObjectFields.OD_PTR:
         case ObjectFields.OD_PTR_ARRAY:
@@ -143,14 +145,4 @@ public final class ObjReader {
         }
     }
 
-    // sa_read_no_dealloc + bitset_read_file: header (size, count, bitset_id),
-    // size*count bytes of element data, then a bitset (bcnt, bcnt*4 bytes).
-    private static void readSizeableArray(ByteBuffer b) {
-        int size = b.getInt();
-        int count = b.getInt();
-        b.getInt();                                     // bitset_id (ignored)
-        b.position(b.position() + size * count);        // element data
-        int bcnt = b.getInt();
-        b.position(b.position() + bcnt * 4);            // bitset words
-    }
 }

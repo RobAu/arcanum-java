@@ -34,14 +34,29 @@ public final class DatArchive implements AutoCloseable {
 
     /** One archive entry (file or directory). */
     public static final class Entry {
+        /**
+         * The lookup key: separators as {@code /} and folded to lower case, since
+         * the archives are Windows-cased and every lookup is case-insensitive.
+         */
         public final String path;
+        /**
+         * The name as actually stored in the archive — separators normalized to
+         * {@code /} but the case left alone (e.g. {@code scr/01324Virgil.scr}).
+         *
+         * <p>{@code tig_file_list_create} hands callers the real on-disk filename,
+         * and some of them put it straight into a path they then show or build on
+         * ({@code script_name_build_scr_name}), so the case has to survive listing.
+         */
+        public final String rawPath;
         public final int flags;
         public final int size;
         public final int compressedSize;
         public final long offset;   // absolute byte offset into the archive
 
-        Entry(String path, int flags, int size, int compressedSize, long offset) {
+        Entry(String path, String rawPath, int flags, int size, int compressedSize,
+              long offset) {
             this.path = path;
+            this.rawPath = rawPath;
             this.flags = flags;
             this.size = size;
             this.compressedSize = compressedSize;
@@ -100,12 +115,15 @@ public final class DatArchive implements AutoCloseable {
             int usize = b.getInt();
             int csize = b.getInt();
             int off = b.getInt();
-            String name = normalize(raw);
-            entries.put(name, new Entry(name, flags, usize, csize, off + baseOffset));
+            String rawName = normalize(raw, false);
+            String name = rawName.toLowerCase();
+            entries.put(name,
+                    new Entry(name, rawName, flags, usize, csize, off + baseOffset));
         }
     }
 
-    private static String normalize(byte[] raw) {
+    /** Separators to {@code /}, optionally folded to lower case. */
+    private static String normalize(byte[] raw, boolean fold) {
         int len = raw.length;
         while (len > 0 && raw[len - 1] == 0) {    // strip NUL terminator
             len--;
@@ -113,7 +131,8 @@ public final class DatArchive implements AutoCloseable {
         StringBuilder sb = new StringBuilder(len);
         for (int i = 0; i < len; i++) {
             char c = (char) (raw[i] & 0xFF);      // latin1
-            sb.append(c == '\\' ? '/' : Character.toLowerCase(c));
+            c = c == '\\' ? '/' : c;
+            sb.append(fold ? Character.toLowerCase(c) : c);
         }
         return sb.toString();
     }

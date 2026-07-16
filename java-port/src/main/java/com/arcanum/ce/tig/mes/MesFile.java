@@ -113,4 +113,18 @@ public final class MesFile {
     public java.util.List<String> valuesInNumberOrder() {
         return new java.util.ArrayList<>(new TreeMap<>(entries).values());
     }
+
+    /**
+     * The highest message number present, or 0 if the file is empty. The C's
+     * equivalent is the last entry after {@code mes_load}'s qsort by num.
+     */
+    public int maxNum() {
+        int max = 0;
+        for (int num : entries.keySet()) {
+            if (num > max) {
+                max = num;
+            }
+        }
+        return max;
+    }
 }

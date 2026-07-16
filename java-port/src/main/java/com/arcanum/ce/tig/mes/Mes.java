@@ -91,4 +91,17 @@ public final class Mes {
         MesFile mf = file(handle);
         return mf != null ? mf.valuesInNumberOrder() : null;
     }
+
+    /**
+     * The highest message number in the file, or 0 if empty/bad.
+     *
+     * <p>The C reaches this as {@code mes_get_entry(handle, mes_entries_count(handle) - 1)}
+     * — {@code mes_load} qsorts entries by num ({@code mes.c:501}), so the last
+     * entry carries the maximum. Callers use it as an upper bound
+     * ({@code description_init} / {@code description_get}).
+     */
+    public static int maxNum(int handle) {
+        MesFile mf = file(handle);
+        return mf != null ? mf.maxNum() : 0;
+    }
 }

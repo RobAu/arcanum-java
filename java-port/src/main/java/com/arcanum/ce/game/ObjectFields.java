@@ -63,6 +63,25 @@ public final class ObjectFields {
     public static final int OBJ_F_CURRENT_AID = 1;  // INT32
     public static final int OBJ_F_LOCATION = 2;     // INT64
 
+    // Named ordinals surfaced for identification (object_examine, object.c:3934).
+    // All verified against the obj.h enum's declaration order and the wire types
+    // assigned in obj.c's object_fields[] init.
+    public static final int OBJ_F_FLAGS = 19;       // INT32
+    /**
+     * INT32 — an <em>internal</em> object-name number, resolved through
+     * {@code oemes\oname.mes} by {@code o_name_get}, NOT through
+     * {@code description.mes}. See {@link OName} and {@code obj.c:1703}.
+     */
+    public static final int OBJ_F_NAME = 22;
+    /** INT32 — the player-facing description number ({@code mes\description.mes}). */
+    public static final int OBJ_F_DESCRIPTION = 23;
+    /** SCRIPT_ARRAY — sparse, keyed by {@link Sap}. See {@link SizeableArray}. */
+    public static final int OBJ_F_SCRIPTS_IDX = 32;
+    public static final int OBJ_F_ITEM_DESCRIPTION_UNKNOWN = 98;      // INT32
+    public static final int OBJ_F_KEY_KEY_ID = 186;                   // INT32
+    public static final int OBJ_F_CRITTER_DESCRIPTION_UNKNOWN = 240;  // INT32
+    public static final int OBJ_F_PC_PLAYER_NAME = 270;               // STRING
+
     // Section [begin, end) ordinal pairs (obj.h). BEGIN/END markers themselves
     // are TYPE==OD_BEGIN/OD_END; real fields are the ordinals strictly between.
     public static final int COMMON_BEGIN = 0, COMMON_END = 37;

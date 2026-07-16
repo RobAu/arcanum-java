@@ -84,7 +84,7 @@ tasks.register('compileGenerated') {
 // Allow forwarding -Darcanum.* and headless props to the app JVM via `gradlew run`.
 run {
     ['arcanum.data', 'arcanum.screenshot', 'arcanum.menu', 'arcanum.hover',
-     'arcanum.screen', 'arcanum.sector', 'arcanum.spawn',
+     'arcanum.screen', 'arcanum.sector', 'arcanum.spawn', 'arcanum.pick',
      'org.lwjgl.util.NoChecks'].each { k ->
         if (System.getProperty(k) != null) systemProperty k, System.getProperty(k)
     }

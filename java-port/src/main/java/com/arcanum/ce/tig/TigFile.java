@@ -144,8 +144,10 @@ public final class TigFile {
             }
         }
 
-        // Archive entry paths are already normalized to lowercase '/' form by
-        // DatArchive; keep only immediate children of `dir` (no nested subdirs).
+        // Match on the archive's lowercase key (DatArchive.Entry.path), but return
+        // the name in its real stored case (rawPath), as tig_file_list_create does
+        // -- callers such as script_name_build_scr_name build paths out of it.
+        // Keep only immediate children of `dir` (no nested subdirs).
         String prefix = dir.replace('\\', '/').toLowerCase() + "/";
         for (DatArchive a : ARCHIVES) {
             for (DatArchive.Entry e : a.files()) {
@@ -153,7 +155,7 @@ public final class TigFile {
                 if (!p.startsWith(prefix) || !p.endsWith(lowerSuffix)) {
                     continue;
                 }
-                String name = p.substring(prefix.length());
+                String name = e.rawPath.substring(prefix.length());
                 if (name.indexOf('/') < 0) {
                     seen.putIfAbsent(name, name);
                 }

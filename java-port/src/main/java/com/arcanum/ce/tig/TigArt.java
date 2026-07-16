@@ -223,6 +223,80 @@ public final class TigArt {
         return true;
     }
 
+    /**
+     * tig_art_frame_data (size only): writes the resolved frame's width/height
+     * into {@code outWH}. Returns false (and zeroes {@code outWH}) if unresolved.
+     */
+    public static boolean frameSize(int artId, int[] outWH) {
+        outWH[0] = 0;
+        outWH[1] = 0;
+        ArtFile.Frame fr = frame(artId);
+        if (fr == null) {
+            return false;
+        }
+        outWH[0] = fr.width;
+        outWH[1] = fr.height;
+        return true;
+    }
+
+    /**
+     * {@code sub_502FD0} (tig/art.c:1123) — the click/pick pixel test: is the
+     * pixel at frame-local {@code (x, y)} solid enough to be picked?
+     *
+     * <pre>
+     * index = y * ...frames_tbl[rotation][frame].width + x;
+     * if (tig_art_cache_entries[...].pixels_tbl[rotation][frame][index] &lt; 2) {
+     *     return TIG_ERR_GENERIC;
+     * }
+     * return TIG_OK;
+     * </pre>
+     *
+     * <p>Callers spell a hit {@code !sub_502FD0(aid, x, y)} (i.e. {@code == TIG_OK
+     * == 0}), so <b>palette indices 0 and 1 are both unpickable</b> — not just
+     * index 0. Rendering is not symmetric with this: {@code ArtFile.frameToRgba}
+     * only treats index 0 as transparent, so an index-1 pixel is drawn but cannot
+     * be clicked. That asymmetry is the C's, and is reproduced here.
+     *
+     * <p>The C also mirrors {@code x} here for critter/monster/unique-NPC
+     * rotations 1..3 when {@code tig_art_mirroring_enabled}; this port does not
+     * mirror those when drawing either ({@link #draw} only flips tiles), so the
+     * test stays consistent with what is actually on screen.
+     *
+     * @return true if the pixel is pickable (index &gt;= 2), false otherwise
+     */
+    public static boolean isPickableAt(int artId, int x, int y) {
+        ArtFile.Frame fr = frame(artId);
+        if (fr == null) {
+            return false;
+        }
+        if (x < 0 || y < 0 || x >= fr.width || y >= fr.height) {
+            return false;
+        }
+        int index = y * fr.width + x;
+        if (index < 0 || index >= fr.indices.length) {
+            return false;
+        }
+        return (fr.indices[index] & 0xFF) >= 2;
+    }
+
+    /** The decoded frame an {@code art_id} resolves to, or null. */
+    private static ArtFile.Frame frame(int artId) {
+        String path = buildPath(artId);
+        if (path == null) {
+            return null;
+        }
+        ArtFile art = load(path);
+        if (art == null) {
+            return null;
+        }
+        int rot = Math.min(ArtId.rotation(artId), art.numRotations - 1);
+        int frame = Math.min(ArtId.frame(artId), art.numFrames - 1);
+        if (rot < 0 || frame < 0) {
+            return null;
+        }
+        return art.frames[rot][frame];
+    }
+
     // -- art_id -> path / draw ------------------------------------------------
     /** Register the game's resolver for non-system art (cf. name_resolve_path). */
     public static void setFilePathResolver(ArtPathResolver resolver) {

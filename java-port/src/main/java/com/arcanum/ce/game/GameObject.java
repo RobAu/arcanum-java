@@ -142,6 +142,51 @@ public final class GameObject {
         return resolvedLong(ObjectFields.OBJ_F_LOCATION, protos);
     }
 
+    /**
+     * The script attached at a given {@link Sap} attachment point, resolved
+     * through the prototype, or null if none is attached. Ports
+     * {@code obj_arrayfield_script_get(obj, OBJ_F_SCRIPTS_IDX, sap, &scr)}
+     * ({@code obj.c}) — {@code obj_arrayfield_fetch} → {@code obj_data_fetch} →
+     * {@code sa_get} for {@code OD_TYPE_SCRIPT_ARRAY}.
+     *
+     * <p>{@code OBJ_F_SCRIPTS_IDX} is a {@link SizeableArray}, so {@code sap} is a
+     * <em>key</em>, not an index — {@link SizeableArray#get} does the
+     * {@code bitset_rank} hop. Reading element {@code [sap]} directly would return
+     * a different script whenever a lower SAP is absent.
+     *
+     * <p>{@code sa_get} zero-fills an absent key and the C's callers then test
+     * {@code scr.num == 0} ({@code dialog.c:3242}, {@code dialog_ui.c:149}); this
+     * returns null for both cases (key absent, or present with num 0) so "no
+     * script here" has one representation.
+     *
+     * @param sap a {@link Sap} attachment point, e.g. {@link Sap#DIALOG}
+     */
+    public Script script(int sap, ProtoStore protos) {
+        Object v = resolved(ObjectFields.OBJ_F_SCRIPTS_IDX, protos);
+        if (!(v instanceof SizeableArray)) {
+            return null;
+        }
+        SizeableArray sa = (SizeableArray) v;
+        if (sa.size != Script.SIZE) {
+            // OD_TYPE_SCRIPT_ARRAY elements are sizeof(Script) == 0xC. A different
+            // stride means we are not looking at the field we think we are.
+            throw new IllegalStateException("OBJ_F_SCRIPTS_IDX element size is "
+                    + sa.size + ", expected " + Script.SIZE);
+        }
+        java.nio.ByteBuffer e = sa.get(sap);
+        if (e == null) {
+            return null;
+        }
+        Script scr = Script.read(e);
+        return scr.isEmpty() ? null : scr;
+    }
+
+    /** Every {@link Sap} key with a script attached, resolved through the prototype. */
+    public int[] scriptKeys(ProtoStore protos) {
+        Object v = resolved(ObjectFields.OBJ_F_SCRIPTS_IDX, protos);
+        return v instanceof SizeableArray ? ((SizeableArray) v).keys() : new int[0];
+    }
+
     @Override
     public String toString() {
         long loc = location();
