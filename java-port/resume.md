@@ -58,20 +58,32 @@ Found the full retail install (Steam):
   `.sec`, but all under `terrain/<name>/…` (the templates, each *is* a mini-map
   with a `map.prp`) plus one `module template/maps/shopmap/`. **No campaign maps
   with objects live in the base archives.**
-- The campaign proper is a **module**: `modules/Arcanum/maps/` has **83 map dirs
-  with obfuscated names** (e.g. `1 kry-zjvgdinzrgP`, `hgrlrH hcdqnynP` — looks
-  like a per-char cipher). On disk those dirs hold mostly **`.mob` files** (loose
-  object/mobile overrides) and only **1 loose `.sec`** (`ShopMap/0.sec`, 16952 B).
-- **Open question (next session, was mid-search when stopped):** where do the
-  campaign **sector `.sec`s** actually come from? Candidates to check:
-  (1) list one campaign map dir's full file breakdown
-  (`find modules/Arcanum/maps -type f | sed 's/.*\.//' | sort | uniq -c`);
-  (2) is there a module-level archive or a `data/` map store;
-  (3) are `.mob` files the object data keyed to template terrain (i.e. the game
-  lays objects from `.mob` onto a `terrain_fill` base)?  Decoding the map-name
-  cipher may help match dirs to known locations (Shrouded Hills, Tarant…).
-- Larger `.sec` = more content: base tile-only sector ≈ `4 + 4096*4 = 16388 B`;
-  ShopMap 0.sec is 16952 B (≈ few objects). Use size to spot object-rich sectors.
+- The campaign proper is a **module**: `modules/Arcanum/maps/` holds ~80 entries
+  with obfuscated names (e.g. `1 kry-zjvgdinzrgP`, `hgrlrH hcdqnynP`). NOTE
+  (corrected 2026-07-16): those obfuscated entries are **files, not dirs** —
+  loose files 16 B … 1.8 MB, high-entropy / encrypted headers (`file(1)` sees
+  garbage; not the plaintext `.sec` layout). Only `ShopMap/` (and `Vormantown/`,
+  `HighRes/Files/`) is a real dir with a plaintext `0.sec`.
+- **Answered (2026-07-16) — how the game actually loads a sector** (`sector.c`
+  `sector_load_game` @0x4D1A30): it reads two numeric-id-named files:
+  `<sector_base_path>\<id>.sec` (base sector; falls back to `terrain_sector_path`
+  → the terrain **template** sector, or `terrain_fill` if none) **overlaid with**
+  `<sector_save_path>\<id>.dif` — a **difference file** (`DifferenceFileFlags`:
+  DIF_HAVE_LIGHT_LIST / _TILE_LIST / …) that patches lights/tiles/roofs/objects
+  onto the base. So campaign content = terrain-template sector + `.dif` diff +
+  `.mob` objects, all keyed by decimal `SECTOR_MAKE(x,y)` id. The engine does
+  **no** decrypt/xor step (grep of src is clean) — plaintext `.sec`/`.dif`.
+- `.sec` on-disk order (`sector_load_editor`, reusable for the port's parser):
+  light_list, tile_list, roof_list, `int placeholder` (0xAA0000–0xAA0004 = format
+  version), then if !=0xAA0000: tile_scripts, [≥0002] sector_scripts,
+  [≥0003] townmap_info + aptitude_adj + light_scheme + sound_list,
+  [≥0004] block_list, then **objlist** (the objects). ShopMap/0.sec (16952 B) is
+  a live example to test the parser against.
+- **Still open:** the obfuscated encrypted `modules/Arcanum/maps/*` files — what
+  they are (map index? worldmap/travel? per-map prp?) and their cipher. They are
+  NOT the `.sec`/`.dif` the loader reads (those are numeric-named), so they are
+  likely NOT needed to render a sector. Lowest-friction path to real objects:
+  parse `ShopMap/0.sec`'s objlist first, no decryption required.
 
 ## After that (toward "playable")
 - **Objects/scenery** (needs the campaign data above): parse the `.sec` object
