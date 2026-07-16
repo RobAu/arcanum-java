@@ -43,7 +43,12 @@ public final class SecDump {
         TileArtResolver resolver = tileNames != null ? new TileArtResolver(tileNames) : null;
         System.out.println("tilename.mes loaded: " + (tileNames != null));
 
-        byte[] bytes = readFromArchives(dir, internal);
+        // Prefer the registered repository (includes modules\Arcanum.dat, where
+        // the campaign maps live); fall back to a raw scan of the data dir.
+        byte[] bytes = TigFile.readBytes(internal);
+        if (bytes == null) {
+            bytes = readFromArchives(dir, internal);
+        }
         if (bytes == null) {
             System.err.println("Not found in any archive: " + internal);
             System.exit(1);

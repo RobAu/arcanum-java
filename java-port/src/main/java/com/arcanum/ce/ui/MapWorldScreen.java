@@ -7,11 +7,13 @@ import com.badlogic.gdx.graphics.g2d.BitmapFont;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 
 import com.arcanum.ce.game.Location;
+import com.arcanum.ce.game.MapList;
 import com.arcanum.ce.game.Player;
 import com.arcanum.ce.game.SectorFile;
 import com.arcanum.ce.game.Tile;
 import com.arcanum.ce.game.TileNames;
 import com.arcanum.ce.tig.TigArt;
+import com.arcanum.ce.tig.TigFile;
 
 /**
  * The in-game isometric world view: a real Arcanum {@code .sec} sector of
@@ -31,9 +33,9 @@ import com.arcanum.ce.tig.TigArt;
  */
 public final class MapWorldScreen implements Screen {
 
-    // A terrain template that ships a populated object list (834 scenery trees),
-    // so New Game opens into woods rather than an empty plain.
-    private static final String DEFAULT_SECTOR = "terrain\\broad leaf forest to plains\\0.sec";
+    // Fallback if the campaign module isn't available: a terrain template that at
+    // least ships an object list, so we open into scenery rather than bare ground.
+    private static final String FALLBACK_SECTOR = "terrain\\broad leaf forest to plains\\0.sec";
     private static final int N = Location.TILES_PER_SECTOR_AXIS;   // 64
     private static final int OBJ_F_OFFSET_X = 3;   // OBJ_F_OFFSET_X (INT32)
     private static final int OBJ_F_OFFSET_Y = 4;   // OBJ_F_OFFSET_Y (INT32)
@@ -44,7 +46,7 @@ public final class MapWorldScreen implements Screen {
     private static final int[] DIR_DX = {-1, -1, -1, 0, 1, 1, 1, 0};
     private static final int[] DIR_DY = {-1, 0, 1, 1, 1, 0, -1, -1};
 
-    private final String sectorPath;
+    private String sectorPath;       // resolved in create() when not overridden
     private SectorFile sector;
     private TileNames tileNames;      // for walkability; null → nothing blocks
     private Player player;
@@ -54,7 +56,7 @@ public final class MapWorldScreen implements Screen {
     private int targetY = -1;
 
     public MapWorldScreen() {
-        this(System.getProperty("arcanum.sector", DEFAULT_SECTOR));
+        this(System.getProperty("arcanum.sector"));   // null → campaign start map
     }
 
     public MapWorldScreen(String sectorPath) {
@@ -63,10 +65,25 @@ public final class MapWorldScreen implements Screen {
 
     @Override
     public void create() {
-        sector = SectorFile.load(sectorPath);
         tileNames = TileNames.load();
         int spawnX = N / 2;
         int spawnY = N / 2;
+
+        // A new game opens on the campaign's START_MAP at its start location —
+        // the IFS Zephyr crash site (map_by_type(MAP_TYPE_START_MAP), map.c).
+        // Needs the module archive; fall back to a template if it isn't there.
+        if (sectorPath == null) {
+            MapList maps = MapList.load();
+            if (maps != null && TigFile.exists(maps.startSectorPath(), null)) {
+                sectorPath = maps.startSectorPath();
+                spawnX = maps.spawnTileX();
+                spawnY = maps.spawnTileY();
+            } else {
+                sectorPath = FALLBACK_SECTOR;
+            }
+        }
+        sector = SectorFile.load(sectorPath);
+
         String spawn = System.getProperty("arcanum.spawn");   // "x,y" (debug/verify)
         if (spawn != null && spawn.matches("\\d+,\\d+")) {
             String[] xy = spawn.split(",");

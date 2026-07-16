@@ -19,6 +19,9 @@ import com.arcanum.ce.tig.TigFile;
 public final class GameData {
 
     /** Load order roughly matches the C engine (tig first, then arcanum1..5). */
+    /** The campaign module, under {@code modules\} -- holds the real maps. */
+    public static final String MODULE_ARCHIVE = "Arcanum.dat";
+
     private static final String[] ARCHIVE_ORDER = {
         "tig.dat",
         "arcanum1.dat", "arcanum2.dat", "arcanum3.dat", "Arcanum4.dat", "Arcanum5.dat",
@@ -38,6 +41,19 @@ public final class GameData {
             return null;
         }
         int n = 0;
+        // The campaign module archive first, so its content wins over the base
+        // archives (as when the engine mounts a module). This is where the real
+        // campaign maps live -- `maps\<name>\<id>.sec` plus its own
+        // `Rules\MapList.mes` naming the START_MAP. Without it only the
+        // `terrain\` templates are visible.
+        File modules = new File(dir, "modules");
+        if (modules.isDirectory()) {
+            File module = caseInsensitive(modules, MODULE_ARCHIVE);
+            if (module != null && TigFile.repositoryAdd(module.getPath())) {
+                n++;
+                TigDebug.println("registered module archive " + module.getName());
+            }
+        }
         for (String name : ARCHIVE_ORDER) {
             File dat = caseInsensitive(dir, name);
             if (dat != null && TigFile.repositoryAdd(dat.getPath())) {
