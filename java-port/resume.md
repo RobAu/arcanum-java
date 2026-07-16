@@ -77,12 +77,21 @@ you can walk around the crash site.
   - `build.gradle` forwards `-Darcanum.data` to the test JVM (data-backed tests
     silently skipped without it).
 
+- **Item art** (`NameResolver.resolveItem`, `ArtId.item*`): ports
+  `a_name_item_aid_to_fname` — entry num = `art_num + 20*(subtype + 50*type)`,
+  plus `20*(5*coverage + 10)` for non-TORSO armour; the **disposition** picks one
+  of four tables (`art\item\item_{ground,inven,paper,schematic}.mes`, in
+  arcanum2/Arcanum5.dat); path = `art\item\<entry>`. Item id bitfields (art.c):
+  type<<0 &15, subtype<<6 &15, disposition<<12 &3, armor_coverage<<14 &7 — and
+  note `tig_art_num_get` **special-cases items** to `(id>>17) & 0x7FF`, not
+  `ART_ID_NUM_SHIFT`. Start-sector art misses **39 → 2**; ground loot now draws
+  (staff, robe, coins, ginka root, a passport by the wreck).
+
 ### Next / follow-ups
-- **`NameResolver` has no `TYPE_ITEM` branch** (~line 133; also wall/portal/
-  light/roof). Every start-sector object now resolves an art *id*, but only 19 of
-  58 resolve to an art *file*: **37 are ITEM art**, 2 are MONSTER (resolver builds
-  `mpgCDXAa.art`; `arcanum1.dat` ships only `mpgUW*` — an armor-encoding question).
-  This is now the top gap: ground items are invisible.
+- **2 MONSTER art ids still miss**: resolver builds `mpgCDXAa.art` but
+  `arcanum1.dat` ships only `mpgUW*` variants — a monster armour-encoding
+  question in `NameResolver.resolveMonster`. (56 of 58 start-sector objects draw.)
+- `NameResolver` still TODOs **wall/portal/light/roof** art paths.
 - **`OBJ_F_NAME` is INT32** (obj.c:3570), a name *number* into the description
   tables — not a string. Naming NPCs (is that Virgil?) needs `description.mes`
   (protos now supply the number). The `vg`/`st` codes in `unique_npc.mes` are

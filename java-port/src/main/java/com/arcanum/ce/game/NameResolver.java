@@ -41,12 +41,24 @@ public final class NameResolver implements ArtPathResolver {
     private static final int ANIM_EXPLODE = 24;     // TIG_ART_ANIM_EXPLODE
     private static final int ARMOR_TYPE_COUNT = 9;
 
+    // a_name_item_aid_to_fname: item art is keyed by disposition into one of four
+    // tables (a_name_item_init).
+    private static final int ITEM_TYPE_ARMOR = 2;            // TIG_ART_ITEM_TYPE_ARMOR
+    private static final int ARMOR_COVERAGE_TORSO = 0;       // TIG_ART_ARMOR_COVERAGE_TORSO
+    private static final int ITEM_DISPOSITION_GROUND = 0;    // TIG_ART_ITEM_DISPOSITION_*
+    private static final int ITEM_DISPOSITION_PAPERDOLL = 2;
+    private static final int ITEM_DISPOSITION_SCHEMATIC = 3;
+
     private int sceneryMes = Mes.INVALID_HANDLE;
     private int interfaceMes = Mes.INVALID_HANDLE;
     private int containerMes = Mes.INVALID_HANDLE;
     private int monsterMes = Mes.INVALID_HANDLE;
     private int uniqueNpcMes = Mes.INVALID_HANDLE;
     private int eyeCandyMes = Mes.INVALID_HANDLE;
+    private int itemGroundMes = Mes.INVALID_HANDLE;
+    private int itemInvenMes = Mes.INVALID_HANDLE;
+    private int itemPaperMes = Mes.INVALID_HANDLE;
+    private int itemSchematicMes = Mes.INVALID_HANDLE;
     private String[] facadeNames;           // null if facadename.mes is unavailable
     private TileArtResolver tileResolver;   // null if tilename.mes is unavailable
     private boolean initialized;
@@ -71,6 +83,10 @@ public final class NameResolver implements ArtPathResolver {
         monsterMes = Mes.load("art\\monster\\monster.mes");
         uniqueNpcMes = Mes.load("art\\unique_npc\\unique_npc.mes");
         eyeCandyMes = Mes.load("art\\eye_candy\\eye_candy.mes");
+        itemGroundMes = Mes.load("art\\item\\item_ground.mes");
+        itemInvenMes = Mes.load("art\\item\\item_inven.mes");
+        itemPaperMes = Mes.load("art\\item\\item_paper.mes");
+        itemSchematicMes = Mes.load("art\\item\\item_schematic.mes");
         int facadeMes = Mes.load("art\\facade\\facadename.mes");
         if (facadeMes != Mes.INVALID_HANDLE) {
             java.util.List<String> names = Mes.valuesInOrder(facadeMes);
@@ -109,6 +125,8 @@ public final class NameResolver implements ArtPathResolver {
                 String s = Mes.find(containerMes, num);
                 return s != null ? "art\\container\\" + s : null;
             }
+            case ArtId.TYPE_ITEM:
+                return resolveItem(aid);
             case ArtId.TYPE_MONSTER:
                 return resolveMonster(aid);
             case ArtId.TYPE_UNIQUE_NPC:
@@ -130,8 +148,45 @@ public final class NameResolver implements ArtPathResolver {
                 return "art\\Facade\\" + facadeNames[num] + ".art";
             }
             default:
-                return null;   // wall/portal/item/light/roof: TODO
+                return null;   // wall/portal/light/roof: TODO
         }
+    }
+
+    /**
+     * a_name_item_aid_to_fname: the entry number packs num/subtype/type (armour
+     * adds a coverage offset), and the disposition picks which of the four item
+     * tables to look it up in.
+     */
+    private String resolveItem(int aid) {
+        int type = ArtId.itemType(aid);
+        int num = ArtId.num(aid) + 20 * (ArtId.itemSubtype(aid) + 50 * type);
+        if (type == ITEM_TYPE_ARMOR) {
+            int coverage = ArtId.itemArmorCoverage(aid);
+            if (coverage != ARMOR_COVERAGE_TORSO) {
+                num += 20 * (5 * coverage + 10);
+            }
+        }
+
+        int mes;
+        switch (ArtId.itemDisposition(aid)) {
+            case ITEM_DISPOSITION_GROUND:
+                mes = itemGroundMes;
+                break;
+            case ITEM_DISPOSITION_PAPERDOLL:
+                mes = itemPaperMes;
+                break;
+            case ITEM_DISPOSITION_SCHEMATIC:
+                mes = itemSchematicMes;
+                break;
+            default:
+                mes = itemInvenMes;
+                break;
+        }
+        if (mes == Mes.INVALID_HANDLE) {
+            return null;
+        }
+        String s = Mes.find(mes, num);
+        return s != null ? "art\\item\\" + s : null;
     }
 
     /** Critter path building (pure; no .mes data needed). Null if armor invalid. */

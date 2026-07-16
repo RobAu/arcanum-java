@@ -59,6 +59,17 @@ public final class ArtId {
     static final int UNIQUE_NPC_ID_MAX_NUM = 256;
     static final int UNIQUE_NPC_ID_NUM_SHIFT = 20;
 
+    // Item field shifts (art.c). Note the item `num` is NOT ART_ID_NUM_SHIFT --
+    // tig_art_num_get special-cases items to (id >> 17) & 0x7FF, see num().
+    static final int ITEM_ID_TYPE_SHIFT = 0;
+    static final int ITEM_ID_MAX_TYPE = 16;
+    static final int ITEM_ID_SUBTYPE_SHIFT = 6;
+    static final int ITEM_ID_MAX_SUBTYPE = 16;
+    static final int ITEM_ID_DISPOSITION_SHIFT = 12;
+    static final int ITEM_ID_MAX_DISPOSITION = 4;
+    static final int ITEM_ID_ARMOR_COVERAGE_SHIFT = 14;
+    static final int ITEM_ID_MAX_ARMOR_COVERAGE = 8;
+
     static final int MAX_PALETTES = 4;
     static final int MAX_ROTATIONS = 8;
 
@@ -101,6 +112,38 @@ public final class ArtId {
             default:
                 return (artId >>> ART_ID_NUM_SHIFT) & (ART_ID_MAX_NUM - 1);
         }
+    }
+
+    /** tig_art_item_id_type_get: TIG_ART_ITEM_TYPE_* (WEAPON=0 .. GENERIC=9). */
+    public static int itemType(int artId) {
+        if (type(artId) != TYPE_ITEM) {
+            return 0;
+        }
+        return (artId >>> ITEM_ID_TYPE_SHIFT) & (ITEM_ID_MAX_TYPE - 1);
+    }
+
+    /** tig_art_item_id_subtype_get. */
+    public static int itemSubtype(int artId) {
+        if (type(artId) != TYPE_ITEM) {
+            return 0;
+        }
+        return (artId >>> ITEM_ID_SUBTYPE_SHIFT) & (ITEM_ID_MAX_SUBTYPE - 1);
+    }
+
+    /** tig_art_item_id_disposition_get: TIG_ART_ITEM_DISPOSITION_* (GROUND=0..SCHEMATIC=3). */
+    public static int itemDisposition(int artId) {
+        if (type(artId) != TYPE_ITEM) {
+            return 0;
+        }
+        return (artId >>> ITEM_ID_DISPOSITION_SHIFT) & (ITEM_ID_MAX_DISPOSITION - 1);
+    }
+
+    /** tig_art_item_id_armor_coverage_get: TIG_ART_ARMOR_COVERAGE_* (TORSO=0..MEDALLION=6). */
+    public static int itemArmorCoverage(int artId) {
+        if (type(artId) != TYPE_ITEM) {
+            return 0;
+        }
+        return (artId >>> ITEM_ID_ARMOR_COVERAGE_SHIFT) & (ITEM_ID_MAX_ARMOR_COVERAGE - 1);
     }
 
     /** tig_art_id_frame_get (type-dependent). */
