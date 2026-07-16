@@ -101,11 +101,18 @@ public final class SecDump {
         System.out.println("\nobjects: " + sec.objects.size());
         java.util.TreeMap<Integer, Integer> aidHist = new java.util.TreeMap<>();
         java.util.TreeMap<Integer, Integer> typeHist = new java.util.TreeMap<>();
+        java.util.HashSet<Integer> tiles2 = new java.util.HashSet<>();
         for (com.arcanum.ce.game.GameObject o : sec.objects) {
             typeHist.merge(o.type, 1, Integer::sum);
             aidHist.merge(o.currentAid(), 1, Integer::sum);
+            long loc = o.location();
+            int tx = (int) (com.arcanum.ce.game.Location.getX(loc) & 63);
+            int ty = (int) (com.arcanum.ce.game.Location.getY(loc) & 63);
+            tiles2.add(tx | (ty << 6));
         }
         System.out.println("  by ObjectType: " + typeHist);
+        System.out.println("  distinct sector-local tiles occupied: " + tiles2.size()
+                + " of 4096");
         int objMissing = 0;
         int shown = 0;
         for (java.util.Map.Entry<Integer, Integer> e : aidHist.entrySet()) {

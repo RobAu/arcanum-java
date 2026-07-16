@@ -126,12 +126,11 @@ public final class MapWorldScreen implements Screen {
             if (aid == 0) {
                 continue;                       // no drawable art (mobiles without a set AID)
             }
+            // OBJ_F_LOCATION holds a full world location; the sector-local tile
+            // (0..63) is its low 6 bits per axis (cf. Location.tileIndexInSector).
             long oloc = o.location();
-            int ox = (int) Location.getX(oloc);
-            int oy = (int) Location.getY(oloc);
-            if (ox < 0 || ox >= N || oy < 0 || oy >= N) {
-                continue;
-            }
+            int ox = (int) (Location.getX(oloc) & (N - 1));
+            int oy = (int) (Location.getY(oloc) & (N - 1));
             long tl = Location.make(ox, oy);
             sprites.add(new Sprite(ox + oy, ox, 0, aid,
                     Location.screenX(tl, originX), Location.screenY(tl, originY),
