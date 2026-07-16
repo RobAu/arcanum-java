@@ -48,6 +48,10 @@ public final class MapWorldScreen implements Screen {
 
     private String sectorPath;       // resolved in create() when not overridden
     private SectorFile sector;
+    // The map's mobile objects (NPCs/critters/ground items) that stand in the
+    // rendered sector. Empty unless we opened the campaign start map.
+    private java.util.List<com.arcanum.ce.game.GameObject> mobiles =
+            java.util.Collections.emptyList();
     private TileNames tileNames;      // for walkability; null → nothing blocks
     private Player player;
     private int originX;
@@ -78,6 +82,11 @@ public final class MapWorldScreen implements Screen {
                 sectorPath = maps.startSectorPath();
                 spawnX = maps.spawnTileX();
                 spawnY = maps.spawnTileY();
+                // The map's mobiles (Virgil & co.) live in one file covering the
+                // whole map (map_load_mobile); keep only those standing in the
+                // sector we render. The terrain-template fallback has no such
+                // file, so this is start-map only.
+                mobiles = loadMobiles(maps);
             } else {
                 sectorPath = FALLBACK_SECTOR;
             }
@@ -91,6 +100,25 @@ public final class MapWorldScreen implements Screen {
             spawnY = Integer.parseInt(xy[1]);
         }
         player = new Player(spawnX, spawnY);
+    }
+
+    /**
+     * The start map's mobile objects that stand in the sector we render. The
+     * mobile file spans the whole map, so filter by sector id (an object belongs
+     * here iff its location's sector is the rendered one). Objects with no
+     * OBJ_F_LOCATION -- carried inventory -- have location 0 and fall out
+     * naturally, since sector 0 is not the start sector.
+     */
+    private static java.util.List<com.arcanum.ce.game.GameObject> loadMobiles(MapList maps) {
+        long sectorId = Location.sectorMake(maps.startX >> 6, maps.startY >> 6);
+        java.util.List<com.arcanum.ce.game.GameObject> here = new java.util.ArrayList<>();
+        for (com.arcanum.ce.game.GameObject o
+                : com.arcanum.ce.game.MapMobiles.load(maps.startMapName)) {
+            if (Location.sectorIdFromLoc(o.location()) == sectorId) {
+                here.add(o);
+            }
+        }
+        return here;
     }
 
     @Override
@@ -137,22 +165,10 @@ public final class MapWorldScreen implements Screen {
             frame = Math.min(frames - 1, (int) (t * frames));
         }
 
-        java.util.List<Sprite> sprites = new java.util.ArrayList<>(sector.objects.size() + 1);
-        for (com.arcanum.ce.game.GameObject o : sector.objects) {
-            int aid = o.currentAid();
-            if (aid == 0) {
-                continue;                       // no drawable art (mobiles without a set AID)
-            }
-            // OBJ_F_LOCATION holds a full world location; the sector-local tile
-            // (0..63) is its low 6 bits per axis (cf. Location.tileIndexInSector).
-            long oloc = o.location();
-            int ox = (int) (Location.getX(oloc) & (N - 1));
-            int oy = (int) (Location.getY(oloc) & (N - 1));
-            long tl = Location.make(ox, oy);
-            sprites.add(new Sprite(ox + oy, ox, 0, aid,
-                    Location.screenX(tl, originX), Location.screenY(tl, originY),
-                    objInt(o, OBJ_F_OFFSET_X), objInt(o, OBJ_F_OFFSET_Y)));
-        }
+        java.util.List<Sprite> sprites = new java.util.ArrayList<>(
+                sector.objects.size() + mobiles.size() + 1);
+        addObjectSprites(sprites, sector.objects);   // static scenery / walls
+        addObjectSprites(sprites, mobiles);          // NPCs / critters / ground items
         // The player draws after any object sharing its tile (order = 1).
         sprites.add(new Sprite(player.x() + player.y(), player.x(), 1,
                 player.artId(frame), pbx + originX, pby + originY, 0, 0));
@@ -289,6 +305,30 @@ public final class MapWorldScreen implements Screen {
 
     private static double lerp(double a, double b, double t) {
         return a + (b - a) * t;
+    }
+
+    /**
+     * Queue each object as a depth-sorted sprite anchored on its tile. Used for
+     * both the sector's static object list and the map's mobiles -- they render
+     * identically, they only differ in where they were read from.
+     */
+    private void addObjectSprites(java.util.List<Sprite> sprites,
+                                  java.util.List<com.arcanum.ce.game.GameObject> objects) {
+        for (com.arcanum.ce.game.GameObject o : objects) {
+            int aid = o.currentAid();
+            if (aid == 0) {
+                continue;                       // no drawable art (mobiles without a set AID)
+            }
+            // OBJ_F_LOCATION holds a full world location; the sector-local tile
+            // (0..63) is its low 6 bits per axis (cf. Location.tileIndexInSector).
+            long oloc = o.location();
+            int ox = (int) (Location.getX(oloc) & (N - 1));
+            int oy = (int) (Location.getY(oloc) & (N - 1));
+            long tl = Location.make(ox, oy);
+            sprites.add(new Sprite(ox + oy, ox, 0, aid,
+                    Location.screenX(tl, originX), Location.screenY(tl, originY),
+                    objInt(o, OBJ_F_OFFSET_X), objInt(o, OBJ_F_OFFSET_Y)));
+        }
     }
 
     /** Read an INT32 object field by ordinal, or 0 if absent. */

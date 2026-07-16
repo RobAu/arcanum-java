@@ -18,10 +18,13 @@ import com.arcanum.ce.tig.TigFile;
  */
 public final class GameData {
 
-    /** Load order roughly matches the C engine (tig first, then arcanum1..5). */
     /** The campaign module, under {@code modules\} -- holds the real maps. */
     public static final String MODULE_ARCHIVE = "Arcanum.dat";
 
+    /** The campaign module's loose directory, beside {@link #MODULE_ARCHIVE}. */
+    public static final String MODULE_DIR = "Arcanum";
+
+    /** Load order roughly matches the C engine (tig first, then arcanum1..5). */
     private static final String[] ARCHIVE_ORDER = {
         "tig.dat",
         "arcanum1.dat", "arcanum2.dat", "arcanum3.dat", "Arcanum4.dat", "Arcanum5.dat",
@@ -52,6 +55,16 @@ public final class GameData {
             if (module != null && TigFile.repositoryAdd(module.getPath())) {
                 n++;
                 TigDebug.println("registered module archive " + module.getName());
+            }
+            // The module's loose directory beside the archive. Not everything the
+            // module needs is packed: the per-map mobile files (`maps\<obfuscated
+            // name>` -- the NPCs/critters/items, see MapMobiles) and `maps\ShopMap\`
+            // ship loose. The archive holds `maps\<name>\*.sec`, and no sector of a
+            // packed map exists loosely, so adding this root (searched ahead of the
+            // archives) adds files without shadowing any of them.
+            File moduleDir = caseInsensitive(modules, MODULE_DIR, true);
+            if (moduleDir != null && TigFile.repositoryAdd(moduleDir.getPath())) {
+                TigDebug.println("registered module directory " + moduleDir.getName());
             }
         }
         for (String name : ARCHIVE_ORDER) {
@@ -89,14 +102,20 @@ public final class GameData {
     }
 
     private static File caseInsensitive(File dir, String name) {
+        return caseInsensitive(dir, name, false);
+    }
+
+    /** Find a child of {@code dir} by name, ignoring case (the data is Windows-cased). */
+    private static File caseInsensitive(File dir, String name, boolean directory) {
         File exact = new File(dir, name);
-        if (exact.isFile()) {
+        if (directory ? exact.isDirectory() : exact.isFile()) {
             return exact;
         }
         File[] files = dir.listFiles();
         if (files != null) {
             for (File f : files) {
-                if (f.isFile() && f.getName().equalsIgnoreCase(name)) {
+                if ((directory ? f.isDirectory() : f.isFile())
+                        && f.getName().equalsIgnoreCase(name)) {
                     return f;
                 }
             }

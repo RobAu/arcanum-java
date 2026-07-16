@@ -37,12 +37,33 @@ you can walk around the crash site.
   list and reports the start sector; `SecDump` now reads via the registered
   repository (`-Darcanum.sec=` for paths with spaces).
 
+- **Map mobiles / NPCs** (`MapMobiles`, `tools.MobDump`): the obfuscated files
+  under `modules\Arcanum\maps\` were never encrypted — they are the **per-map
+  mobile files**. `map_obfuscate_name` (map.c) = shift +13 but **wrap by −24, not
+  −26** (a quirk of the original: letters past 'M' shift −11), then **reverse**.
+  So `Arcanum1-024-fixed` → `qrmvs-420-1zjcnpgN` (1,823,280 B, loose — *not* in
+  the archive). Format: **16-byte GUID, then back-to-back `obj_read` objects to
+  EOF** (`map_load_mobile`, game branch). Parses **7399 objects consuming the file
+  exactly**, independently matching the 7399 `.mob` entries the archive holds for
+  this map. `GameData` now also registers `<data>/modules/Arcanum` as a loose root
+  (verified it shadows nothing: packed `.sec` still come from the archive).
+  58 mobiles stand in the start sector (20 NPC), drawn in the same depth-sorted
+  pass — including a unique NPC at tile (31,32), adjacent to spawn (30,32).
+
 ### Next / follow-ups
-- **NPCs (Virgil et al.) are missing**: living characters are loose `.mob` files
-  (one serialized object each — same `obj_read` format we already have), not part
-  of the sector's static object list. Loading `maps\<name>\*.mob` should populate
-  them. Note the campaign map dirs on disk are the obfuscated-name files; the
-  `.mob`s may live in the module archive too — check `Arcanum.dat` for `.mob`.
+- **Prototype field inheritance is the big one.** Only 18 of the 58 start-sector
+  mobiles draw; the other 40 (incl. 6 NPCs) have **no overridden `CURRENT_AID`** and
+  inherit it from their prototype — `obj_field_fetch` (obj.c ~2503) falls back to
+  the proto for fields absent from the instance's dif bitmap. Proto lookup isn't
+  ported (protos live in `.pro`/proto archives keyed by `prototype_oid`). Across
+  the whole map **5913 of 7399** objects have no instance `CURRENT_AID`, so this
+  gates most content. Same mechanism would give names/blocking/etc.
+- **`OBJ_F_NAME` is INT32** (obj.c:3570), a name *number* into the description
+  tables — not a string. Naming NPCs (is that Virgil?) needs `description.mes` +
+  proto resolution. The `vg`/`st` codes in `unique_npc.mes` are outfit variants
+  shared across body types, not character names.
+- `NameResolver` TODOs item/wall/portal/light/roof art paths (line ~133) — 4 of
+  the 18 drawable start-sector mobiles are `TIG_ART_TYPE_ITEM` and don't resolve.
 - **Multi-sector scrolling**: we render one 64×64 sector, so the map edge is a
   hard stop; the start map has many sectors.
 - Object collision (block on WALL/scenery with the blocking flag) — crash-site
