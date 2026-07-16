@@ -113,6 +113,24 @@ public final class Player {
         this.anim = anim;
     }
 
+    /**
+     * The placeholder PC's {@code STAT_GENDER}.
+     *
+     * <p>Not a second placeholder invented alongside the art: {@code
+     * object_set_gender_and_race} ({@code object.c:3995}) sets {@code STAT_GENDER}
+     * and the art id's gender bit from the same argument —
+     * <pre>
+     * stat_base_set(obj, STAT_GENDER, gender);
+     * aid = tig_art_critter_id_gender_set(aid, gender);
+     * </pre>
+     * so the avatar's appearance bit <em>is</em> its stat. Ours is
+     * {@code GENDER_MALE} ({@code stat.h:41} — {@code FEMALE = 0, MALE = 1}), which
+     * is what the dialog gender filter is told until character creation exists.
+     */
+    public int gender() {
+        return GENDER;
+    }
+
     /** The critter {@code art_id} for the current facing + animation, frame 0. */
     public int artId() {
         return artId(0);

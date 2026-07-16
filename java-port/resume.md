@@ -138,6 +138,33 @@ you can walk around the crash site.
   from the picture. Re-project to the new logical size; GL viewport takes
   back-buffer pixels (they differ on HiDPI).
 
+- **Dialog conditions** (`DialogConditions` = `sub_4150D0`, `DialogOptions` =
+  `sub_414F50`, `Reaction` = `reaction_get`): responses are now filtered as the
+  engine filters them — gender, then IQ, then the condition string, capped at
+  **5 options** (`cnt < 5`). Virgil's opening went **4 duplicated → 2 distinct**.
+  - Conditions are a 2-letter-code DSL (**not** the `.scr` VM): skip non-alpha
+    (but `'$'` starts a code), take 2 chars, `atoi` the rest, look up in
+    `off_5A06BC`, switch. Signed threshold: `value<0` ⇒ require `stat <= -value`;
+    `value>=0` ⇒ require `stat >= value`. ANDed; empty ⇒ true.
+  - **`reaction_get` returns 50 when the PC isn't a real `OBJ_TYPE_PC`** — its own
+    second guard (`sub_4C0D00`), not a fudge. That's what resolves the dupes:
+    `re62` (≥62) fails, `re-61` (≤61) passes. `Reaction.get` *throws* rather than
+    invent a score if ever handed a real PC.
+  - **The switch's `default: return false`** — an *unknown* code **hides** the
+    response. Verified safe by scanning every shipped dialog: 26,023 code
+    instances, only **16 unknown**, all vanilla data bugs.
+  - **`DIALOG_COND_GOLD` (`$$`) is dead code in retail**: the scanner takes two
+    chars blind, so the shipped `{$500}` reads as code `"$5"` (unknown → hidden).
+    `$$` never appears correctly anywhere in the data.
+  - Faithfully reproduced engine bugs (a "fix" would silently disagree with the
+    game): `script_local_counter_get` has **no mask** (`counters >> (8*counter)`,
+    so counter 0 returns all four bytes); `sub_4167C0` skips digits but never a
+    sign, so `"tr -5 3"` yields `-5` as *both* values.
+  - **Real (6):** `re`, `me`, `lf`, `lc`, `wa`, `wt` (`lf`/`lc` read the NPC's
+    `SAP_DIALOG` `Script` header). **Deferred (31):** everything needing PC state;
+    they pass but are **counted** (`DeferredTally`, surfaced by `DlgDump`). Across
+    Virgil: 114 of 306 responses gated, 152 code instances, 128 deferred.
+
 ### Next / follow-ups
 - **2 MONSTER art ids still miss**: resolver builds `mpgCDXAa.art` but
   `arcanum1.dat` ships only `mpgUW*` variants — a monster armour-encoding

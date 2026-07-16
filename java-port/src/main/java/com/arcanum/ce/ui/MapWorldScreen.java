@@ -768,7 +768,12 @@ public final class MapWorldScreen implements Screen {
             return;
         }
         speaker = o;
-        dialogUi.start(file, DIALOG_ENTRY_LINE, display);
+        // sub_414F50 reads STAT_GENDER and STAT_INTELLIGENCE off the PC. We have no
+        // PC object; the avatar's gender bit is its STAT_GENDER (Player.gender), and
+        // intelligence stays at DialogUi's documented placeholder.
+        dialogUi.setFemale(player.gender() == com.arcanum.ce.game.DialogOptions.GENDER_FEMALE);
+        // The speaker is DialogState.npc_obj: the re/lf/lc/wa/wt conditions read it.
+        dialogUi.start(file, DIALOG_ENTRY_LINE, display, o, protos);
         if (!dialogUi.isActive()) {
             pickedLines.add("dialog has no line " + DIALOG_ENTRY_LINE);
             speaker = null;

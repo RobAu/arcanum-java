@@ -184,8 +184,11 @@ public final class DialogFile {
         return out;
     }
 
-    /** C {@code atoi}: leading integer, 0 when absent/blank. */
-    private static int atoi(String s) {
+    /**
+     * C {@code atoi}: leading integer, 0 when absent/blank. Shared with
+     * {@link DialogConditions}, which scans the same fields with the same libc.
+     */
+    static int atoi(String s) {
         if (s == null) {
             return 0;
         }

@@ -11,7 +11,11 @@ import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.graphics.g2d.BitmapFont;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 
+import com.arcanum.ce.game.DialogConditions;
 import com.arcanum.ce.game.DialogFile;
+import com.arcanum.ce.game.DialogOptions;
+import com.arcanum.ce.game.GameObject;
+import com.arcanum.ce.game.ProtoStore;
 import com.arcanum.ce.tig.font.TigFontRenderer;
 
 /**
@@ -34,17 +38,24 @@ import com.arcanum.ce.tig.font.TigFontRenderer;
  *
  * <p>Flow: an NPC line is shown, the consecutive PC entries after it are its
  * options, and choosing one jumps to that option's {@code responseVal} (the next
- * NPC line). A jump of 0 ends the conversation. Responses are filtered by
- * intelligence exactly as {@code dialog.c:1348} does: {@code iq < 0} requires
- * {@code intelligence <= -iq} (the dumb lines), {@code iq >= 0} requires
- * {@code intelligence >= iq}.
+ * NPC line). A jump of 0 ends the conversation.
  *
- * <p><b>Approximation:</b> each entry carries a {@code conditions} test
- * ({@code re62} = reaction, {@code gf2004} = global flag) and an {@code actions}
- * effect (set flags, advance quests). Both need the script VM, which is not
- * ported — so conditions are <b>ignored</b> (every IQ-eligible response is
- * offered) and actions are <b>not applied</b>. Story-gated lines can therefore
- * appear out of context.
+ * <p>Which responses are offered is {@link DialogOptions}' job — the port of
+ * {@code sub_414F50} ({@code dialog.c:1309}), which filters on gender, then
+ * intelligence, then the entry's {@link DialogConditions condition string}, and
+ * stops at five. This class only draws the survivors.
+ *
+ * <p><b>Approximation.</b> Two things are still missing here:
+ * <ul>
+ *   <li>The PC's <b>gender and intelligence</b> are placeholders
+ *       ({@link #DEFAULT_INTELLIGENCE}, male) until character creation exists;
+ *       {@link #setIntelligence}/{@link #setFemale} set them.</li>
+ *   <li>An entry's {@code actions} field (set flags, advance quests, adjust
+ *       reaction) is <b>not applied</b> when a response is chosen —
+ *       {@code sub_415BA0} mutates game state and needs a real PC object. Its
+ *       absence is also why the {@code gv}/{@code gf}/{@code qu}/... conditions
+ *       have nothing to read; see {@link DialogConditions}.</li>
+ * </ul>
  *
  * <p>Input: {@code 1..9} or click a response; {@code Esc} leaves.
  */
@@ -89,6 +100,10 @@ public final class DialogUi {
     private String npcName = "";
     private int intelligence = DEFAULT_INTELLIGENCE;
     private boolean female;                         // PC gender: picks the NPC's female line
+    // DialogState.npc_obj / .pc_obj, as sub_4150D0 wants them. pc stays null until
+    // a real OBJ_TYPE_PC exists; DialogConditions is built around that.
+    private DialogConditions.Context conditions =
+            new DialogConditions.Context(null, null, null);
 
     private TigFontRenderer font;                   // real Arcanum face; null -> BitmapFont
     private boolean fontLoadAttempted;
@@ -96,10 +111,18 @@ public final class DialogUi {
     // Screen-space rows of the drawn options, for click hit-testing.
     private final List<float[]> optionRects = new ArrayList<>();
 
-    /** Begin a conversation at {@code lineNum}; no-op if that line is missing. */
-    public void start(DialogFile dialog, int lineNum, String npcName) {
+    /**
+     * Begin a conversation at {@code lineNum}; no-op if that line is missing.
+     *
+     * <p>{@code speaker} is {@code DialogState.npc_obj}: the {@code re}, {@code lf},
+     * {@code lc}, {@code wa} and {@code wt} conditions all read it, so passing null
+     * quietly changes which options appear.
+     */
+    public void start(DialogFile dialog, int lineNum, String npcName,
+                      GameObject speaker, ProtoStore protos) {
         this.dialog = dialog;
         this.npcName = npcName != null ? npcName : "";
+        this.conditions = new DialogConditions.Context(speaker, null, protos);
         goTo(lineNum);
     }
 
@@ -113,15 +136,24 @@ public final class DialogUi {
         options.clear();
     }
 
-    /** PC intelligence used to filter responses (dialog.c:1348). */
+    /** PC {@code STAT_INTELLIGENCE}, used to filter responses. */
     public void setIntelligence(int intelligence) {
         this.intelligence = intelligence;
         refreshOptions();
     }
 
-    /** PC gender; selects the NPC line's female variant when set. */
+    /**
+     * PC {@code STAT_GENDER}. Two things depend on it: the NPC line's female text
+     * variant, and the responses' gender filter.
+     */
     public void setFemale(boolean female) {
         this.female = female;
+        refreshOptions();
+    }
+
+    /** The PC's gender as {@code stat_level_get(pc, STAT_GENDER)} reports it. */
+    private int gender() {
+        return female ? DialogOptions.GENDER_FEMALE : DialogOptions.GENDER_MALE;
     }
 
     private void goTo(int lineNum) {
@@ -139,21 +171,14 @@ public final class DialogUi {
         refreshOptions();
     }
 
+    /** sub_414F50: gender, then intelligence, then conditions, capped at five. */
     private void refreshOptions() {
         options.clear();
         if (dialog == null || current == null) {
             return;
         }
-        for (DialogFile.Entry r : dialog.responsesTo(current)) {
-            if (passesIq(r.iq)) {
-                options.add(r);
-            }
-        }
-    }
-
-    /** dialog.c:1348 -- negative iq is a maximum, non-negative is a minimum. */
-    private boolean passesIq(int iq) {
-        return (iq < 0 && intelligence <= -iq) || (iq >= 0 && intelligence >= iq);
+        options.addAll(DialogOptions.offered(dialog, current, conditions,
+                intelligence, gender()));
     }
 
     /** Handle input; returns true while the conversation still has the focus. */

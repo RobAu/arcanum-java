@@ -67,6 +67,8 @@ public final class ObjectFields {
     // All verified against the obj.h enum's declaration order and the wire types
     // assigned in obj.c's object_fields[] init.
     public static final int OBJ_F_FLAGS = 19;       // INT32
+    /** INT32 — {@code OSF_*} spell flags ({@code obj_flags.h}). */
+    public static final int OBJ_F_SPELL_FLAGS = 20;
     /**
      * INT32 — an <em>internal</em> object-name number, resolved through
      * {@code oemes\oname.mes} by {@code o_name_get}, NOT through
@@ -81,6 +83,12 @@ public final class ObjectFields {
     public static final int OBJ_F_KEY_KEY_ID = 186;                   // INT32
     public static final int OBJ_F_CRITTER_DESCRIPTION_UNKNOWN = 240;  // INT32
     public static final int OBJ_F_PC_PLAYER_NAME = 270;               // STRING
+    /**
+     * INT32 — {@code ONF_*} NPC flags ({@code obj_flags.h}), the first field of the
+     * NPC section ({@link #NPC_BEGIN} + 1). Read by the {@code wa}/{@code wt} dialog
+     * conditions; see {@link DialogConditions}.
+     */
+    public static final int OBJ_F_NPC_FLAGS = 280;
 
     // Section [begin, end) ordinal pairs (obj.h). BEGIN/END markers themselves
     // are TYPE==OD_BEGIN/OD_END; real fields are the ordinals strictly between.
