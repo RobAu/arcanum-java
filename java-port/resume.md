@@ -1,11 +1,20 @@
 # Resume — Arcanum CE Java port (world view + player)
 
-**Where we are:** menu → **New Game** opens an isometric world view that renders
-real `.sec` terrain **plus its object list** (scenery) from the `.dat` archives,
-with a controllable player critter that **glides** (smooth tween-walk) between
-tiles and a camera that follows. New Game now spawns in a *populated* template
-(`terrain\broad leaf forest to plains\0.sec`, 834 scenery objects — grass tufts +
-dead bushes, all art resolves) instead of an empty plain.
+**Where we are:** menu → **New Game** opens on the **campaign's real start map —
+the IFS Zephyr crash site** — rendering its `.sec` terrain **plus the sector's
+object list** (317 objects: `Tailblade`/`Junk2`/`RopeSpools` wreckage, blood,
+campfire, pines/ferns/bushes — all art resolves), with a controllable player that
+**glides** (smooth tween-walk) and a camera that follows. Confirmed playable:
+you can walk around the crash site.
+
+> **Settled: the campaign maps are in `modules\Arcanum.dat`** (340 MB; 1680 `.sec`
+> across 81 maps + its own `Rules\MapList.mes`). Earlier notes claiming "no
+> campaign maps ship in the archives" were **wrong** — `GameData` simply never
+> registered the module archive. It now registers it *first* (module wins). The
+> obfuscated loose files under `modules\Arcanum\maps\` are a red herring; nothing
+> needs decrypting. Start map comes from the `Type: START_MAP` entry in
+> `MapList.mes` → `Arcanum1-024-fixed` @ world (92958, 82592) →
+> `maps\Arcanum1-024-fixed\86570436012.sec`, spawn tile (30,32).
 
 ## Latest work (uncommitted → committed this session)
 - **Object parsing** (`object-rendering-spec.md`): full `.sec` object list ported
@@ -22,13 +31,26 @@ dead bushes, all art resolves) instead of an empty plain.
   cycling; steps gate on tween completion (replaced the frame cooldown).
 - `SecDump` extended to dump + art-resolve the object layer (`-Darcanum.sec=`).
 
+- **Campaign start map** (`GameData` module archive + `MapList` porting
+  `map_list_info_load`; `MapWorldScreen` resolves START_MAP → sector + spawn
+  tile, falls back to a terrain template). Tool: `tools.StartMap` lists the map
+  list and reports the start sector; `SecDump` now reads via the registered
+  repository (`-Darcanum.sec=` for paths with spaces).
+
 ### Next / follow-ups
-- Object collision (block on WALL/scenery with the blocking flag; current forest
-  scenery is non-blocking so the scene is fully walkable already).
-- Richer scenes: campaign maps need `.dif`/`.mob` overlays + the encrypted
-  `modules/Arcanum/maps/*` (still unsolved); base templates only carry natural
-  scenery. Decode array/handle object fields (currently consumed, not stored).
-- Basic interaction (click object → name/description), multi-sector scrolling.
+- **NPCs (Virgil et al.) are missing**: living characters are loose `.mob` files
+  (one serialized object each — same `obj_read` format we already have), not part
+  of the sector's static object list. Loading `maps\<name>\*.mob` should populate
+  them. Note the campaign map dirs on disk are the obfuscated-name files; the
+  `.mob`s may live in the module archive too — check `Arcanum.dat` for `.mob`.
+- **Multi-sector scrolling**: we render one 64×64 sector, so the map edge is a
+  hard stop; the start map has many sectors.
+- Object collision (block on WALL/scenery with the blocking flag) — crash-site
+  scenery is non-blocking, so it's fully walkable today.
+- Facades in this map's tile layer are drawn flat (no hotspot offset) — the big
+  wreck/cliff art may sit slightly wrong; see `tile-rendering-spec.md`.
+- `.dif` overlays, decode array/handle object fields (consumed, not stored),
+  click-to-inspect interaction.
 
 ## Committed (on `java-port` branch)
 - `447812cf` — real Arcanum font in the menu (`TigFontRenderer`)

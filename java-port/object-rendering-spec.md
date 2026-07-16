@@ -1,16 +1,26 @@
 # Spec: parsing & rendering `.sec` sector objects (scenery / NPCs / items)
 
-> **Status: object parsing IN PROGRESS.** The terrain layer already renders
-> (see `tile-rendering-spec.md`). This spec covers the *object list* that follows
-> the terrain in a `.sec` sector — the scenery, walls, containers, critters and
-> items that make a sector feel like a place. It is the full byte-format
-> reverse-engineered from the C engine, plus the on-screen anchoring formula.
+> **Status: object parsing + rendering DONE.** New Game opens on the campaign's
+> START_MAP — the IFS Zephyr crash site — with its 317 scenery objects drawn
+> depth-sorted with the player. The terrain layer is in `tile-rendering-spec.md`.
+> This spec is the full `.sec` object-list byte format reverse-engineered from the
+> C engine, plus the on-screen anchoring formula.
 >
-> Test fixture: `…/Steam/steamapps/common/Arcanum/Arcanum/modules/Arcanum/maps/ShopMap/0.sec`
-> (16952 bytes) — a plaintext, object-bearing sector (a shop interior). The base
-> `.dat` archives ship only terrain *templates* with **no** objects, so this loose
-> module sector is the canonical parse/verify target. **No decryption is needed:**
-> the engine reads plaintext `.sec` (grep of `src/game` shows no xor/decrypt).
+> **Where the campaign maps live (settled 2026-07-16 — supersedes earlier notes):**
+> `modules\Arcanum.dat` (340 MB) — a normal `.dat` holding **1680 `.sec` across 81
+> maps** (`maps\<name>\<id>.sec` + `map.prp`), plus its own `Rules\MapList.mes`.
+> Earlier sessions concluded "no campaign maps ship in the archives" **only because
+> `GameData` never registered that module archive** — it now does, first, so module
+> content wins (as when the engine mounts a module). The obfuscated loose files
+> under `modules\Arcanum\maps\` were a red herring; nothing needs decrypting.
+> **No decryption is needed:** the engine reads plaintext `.sec` (grep of
+> `src/game` shows no xor/decrypt).
+>
+> Verify targets: the start sector `maps\Arcanum1-024-fixed\86570436012.sec`
+> (317 objects, 18 distinct art ids, all resolve) and every archived terrain
+> template with objects (165 sectors, all byte-exact). Note
+> `modules\Arcanum\maps\ShopMap\0.sec` has an **empty** static object list — its
+> mobiles are sibling `.mob` files — so it is a poor object fixture.
 >
 > **Correctness oracle:** the object list stores its element count as a trailing
 > `int32` at end-of-file. A parser is byte-exact iff, after reading `cnt` objects,
