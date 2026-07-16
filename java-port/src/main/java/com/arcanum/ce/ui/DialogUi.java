@@ -52,8 +52,16 @@ public final class DialogUi {
 
     /** tb.c: the text bubble font is interface art 229. */
     private static final int BUBBLE_FONT_ART_NUM = 229;
-    /** tb.c: TEXT_BUBBLE_WIDTH. */
-    private static final int BUBBLE_WIDTH = 200;
+
+    /**
+     * tb.c: {@code TEXT_BUBBLE_WIDTH}. The engine wraps <em>every</em> bubble to
+     * this, at any resolution — {@code tig_font_write} is handed a 200×200
+     * {@code tb_content_rect} and returns the used extent. A long line therefore
+     * becomes a tall, narrow column: Virgil's opening is five squeezed lines.
+     */
+    private static final int ENGINE_BUBBLE_WIDTH = 200;
+    /** Our cap, so a wide window doesn't produce one absurdly long line. */
+    private static final int MAX_BUBBLE_WIDTH = 460;
     /** Gap between the speaker's anchor and the bottom of the bubble. */
     private static final int BUBBLE_GAP = 24;
     /** TIG_FONT_SHADOW: a 1px black drop shadow. */
@@ -216,10 +224,27 @@ public final class DialogUi {
         drawOptions(batch, fallback, width, height);
     }
 
-    /** The NPC's line: centred, shadowed, wrapped to 200px, floating above them. */
+    /**
+     * How wide to wrap a bubble.
+     *
+     * <p><b>Deviation from the engine.</b> {@code tb.c} wraps to a fixed
+     * {@link #ENGINE_BUBBLE_WIDTH} (200px) regardless of resolution, which makes
+     * a long line unreadably narrow. We scale with the window instead, capped, and
+     * never go below the engine's width. {@code -Darcanum.bubblewidth=200} (or any
+     * value) pins it, restoring the original behaviour exactly.
+     */
+    private int bubbleWidth(int windowWidth) {
+        Integer pinned = Integer.getInteger("arcanum.bubblewidth");
+        if (pinned != null) {
+            return Math.max(1, pinned);
+        }
+        return Math.max(ENGINE_BUBBLE_WIDTH, Math.min(windowWidth / 2, MAX_BUBBLE_WIDTH));
+    }
+
+    /** The NPC's line: centred, shadowed, wrapped, floating above them. */
     private void drawBubble(SpriteBatch batch, BitmapFont fallback, int width, int height,
                             float speakerX, float speakerY) {
-        List<String> lines = wrap(clean(current.text(female)), BUBBLE_WIDTH, fallback);
+        List<String> lines = wrap(clean(current.text(female)), bubbleWidth(width), fallback);
         int lh = lineHeight(fallback);
         float top = speakerY - BUBBLE_GAP - lines.size() * lh;
 
