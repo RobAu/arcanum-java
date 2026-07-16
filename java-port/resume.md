@@ -50,20 +50,45 @@ you can walk around the crash site.
   58 mobiles stand in the start sector (20 NPC), drawn in the same depth-sorted
   pass — including a unique NPC at tile (31,32), adjacent to spawn (30,32).
 
+- **Prototype loading + field inheritance** (`ProtoStore`, `ObjectID`,
+  `tools.ProtoDump`): `obj_field_fetch` (obj.c ~2495) — a field absent from an
+  instance's dif bitmap is read **from its prototype**, looked up by
+  `prototype_oid`. Protos are `proto\*.pro`, each a plain `obj_read` (proto path:
+  `prototype_oid.type == -1` BLOCKED, **no `num_fields`**, and **every** field
+  serialized unconditionally in enumeration order). 1426 loose in
+  `<data>\data\proto` + more in `Arcanum5.dat` → **1427 protos, 0 failures**.
+  A proto's own oid is `OID_TYPE_A` with `d.a` = the proto number.
+  **Result: whole-map objects lacking an art id 5915 → 0**; start-sector mobiles
+  with an AID 18 → **58/58**, static objects 288 → **317/317**.
+  - `GameData` now registers `<data>\data` as a loose root. It **does** shadow 67
+    archive entries (65 protos, `art\missing.dat`, `sound\soundparams.mes`) —
+    **intended**: `tig_file_repository_add_native` prepends and `gamelib_load_data`
+    adds `data` *after* the archives, so loose files deliberately win (that's how
+    loose patches override packed content). It never shadows the module archive.
+  - **Gotcha:** `ObjectID`'s `padding_2`/`padding_4` and the union bytes past the
+    active member are **uninitialized garbage on disk** (e.g. `010143 - Food.pro`
+    has `padding_4 = 0x033C85E2`). Keying equality on the raw 24 bytes matches
+    **zero** protos. `equals`/`hashCode` compare only the active union member
+    (per `objid_is_equal`); `isEqualC()` keeps the C's non-reflexive quirk
+    (BLOCKED/HANDLE compare false even to themselves) out of `equals`.
+  - `TigFile.list` added (ports `tig_file_list_create`), case-insensitively
+    sorted like `tig_file_list_add`, so the C's last-wins duplicate-oid
+    resolution (3 protos exist under two filenames) reproduces exactly.
+  - `build.gradle` forwards `-Darcanum.data` to the test JVM (data-backed tests
+    silently skipped without it).
+
 ### Next / follow-ups
-- **Prototype field inheritance is the big one.** Only 18 of the 58 start-sector
-  mobiles draw; the other 40 (incl. 6 NPCs) have **no overridden `CURRENT_AID`** and
-  inherit it from their prototype — `obj_field_fetch` (obj.c ~2503) falls back to
-  the proto for fields absent from the instance's dif bitmap. Proto lookup isn't
-  ported (protos live in `.pro`/proto archives keyed by `prototype_oid`). Across
-  the whole map **5913 of 7399** objects have no instance `CURRENT_AID`, so this
-  gates most content. Same mechanism would give names/blocking/etc.
+- **`NameResolver` has no `TYPE_ITEM` branch** (~line 133; also wall/portal/
+  light/roof). Every start-sector object now resolves an art *id*, but only 19 of
+  58 resolve to an art *file*: **37 are ITEM art**, 2 are MONSTER (resolver builds
+  `mpgCDXAa.art`; `arcanum1.dat` ships only `mpgUW*` — an armor-encoding question).
+  This is now the top gap: ground items are invisible.
 - **`OBJ_F_NAME` is INT32** (obj.c:3570), a name *number* into the description
-  tables — not a string. Naming NPCs (is that Virgil?) needs `description.mes` +
-  proto resolution. The `vg`/`st` codes in `unique_npc.mes` are outfit variants
-  shared across body types, not character names.
-- `NameResolver` TODOs item/wall/portal/light/roof art paths (line ~133) — 4 of
-  the 18 drawable start-sector mobiles are `TIG_ART_TYPE_ITEM` and don't resolve.
+  tables — not a string. Naming NPCs (is that Virgil?) needs `description.mes`
+  (protos now supply the number). The `vg`/`st` codes in `unique_npc.mes` are
+  outfit variants shared across body types, not character names.
+- Note: mobile counts are **7405 / 5915** (an earlier note said 7399/5913;
+  verified against clean HEAD — the older figure was simply wrong).
 - **Multi-sector scrolling**: we render one 64×64 sector, so the map edge is a
   hard stop; the start map has many sectors.
 - Object collision (block on WALL/scenery with the blocking flag) — crash-site

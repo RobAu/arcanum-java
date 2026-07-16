@@ -18,9 +18,7 @@ public final class ObjReader {
     public static final int OBJ_FILE_VERSION = 119;
 
     /** ObjectID / HANDLE serialized size (obj_id.h: sizeof(ObjectID) == 0x18). */
-    public static final int OBJECT_ID_SIZE = 24;
-
-    private static final int OID_TYPE_BLOCKED = -1;   // int16 (obj_id.h)
+    public static final int OBJECT_ID_SIZE = ObjectID.SIZE;
 
     private ObjReader() {
     }
@@ -38,20 +36,20 @@ public final class ObjReader {
                     + (b.position() - 4));
         }
 
-        // prototype_oid: read its int16 type, then skip the rest of the 24 bytes.
-        int protoType = b.getShort();
-        b.position(b.position() + (OBJECT_ID_SIZE - 2));
-
-        if (protoType == OID_TYPE_BLOCKED) {
-            return readProto(b);
+        // The prototype_oid decides the body: OID_TYPE_BLOCKED means "this object
+        // IS a prototype" (it inherits from nothing); anything else names the
+        // prototype it inherits absent fields from (obj_field_fetch, obj.c).
+        ObjectID protoOid = ObjectID.read(b);
+        if (protoOid.isBlocked()) {
+            return readProto(b, protoOid);
         }
-        return readInstance(b);
+        return readInstance(b, protoOid);
     }
 
     // obj_inst_read_file: oid(24), objType(4), num_fields(4), field_48 bitmap,
     // then the dif-gated field values.
-    private static GameObject readInstance(ByteBuffer b) {
-        b.position(b.position() + OBJECT_ID_SIZE);      // oid
+    private static GameObject readInstance(ByteBuffer b, ObjectID protoOid) {
+        ObjectID oid = ObjectID.read(b);
         int objType = b.getInt();
         b.getShort();                                   // num_fields: int16_t in the
                                                         // Object struct (obj.c), so
@@ -63,7 +61,7 @@ public final class ObjReader {
             field48[i] = b.getInt();
         }
 
-        GameObject obj = new GameObject(objType, false);
+        GameObject obj = new GameObject(objType, oid, protoOid);
         for (int[] range : ObjectFields.rangesForType(objType)) {
             for (int fld = range[0] + 1; fld < range[1]; fld++) {
                 int ci = ObjectFields.cai[fld];
@@ -77,15 +75,17 @@ public final class ObjReader {
     }
 
     // obj_proto_read_file: oid(24), objType(4), field_4C bitmap, then EVERY field
-    // read unconditionally (protos are not dif-gated).
-    private static GameObject readProto(ByteBuffer b) {
-        b.position(b.position() + OBJECT_ID_SIZE);      // oid
+    // read unconditionally (protos are not dif-gated). Note there is no
+    // num_fields int16 here — that belongs to the instance path only.
+    private static GameObject readProto(ByteBuffer b, ObjectID protoOid) {
+        ObjectID oid = ObjectID.read(b);                // the proto's own id:
+                                                        // OID_TYPE_A, d.a = proto number
         int objType = b.getInt();
 
         int words = ObjectFields.wordCount(objType);
         b.position(b.position() + words * 4);           // field_4C (unused here)
 
-        GameObject obj = new GameObject(objType, true);
+        GameObject obj = new GameObject(objType, oid, protoOid);
         for (int[] range : ObjectFields.rangesForType(objType)) {
             for (int fld = range[0] + 1; fld < range[1]; fld++) {
                 obj.put(fld, readValue(b, ObjectFields.TYPE[fld]));

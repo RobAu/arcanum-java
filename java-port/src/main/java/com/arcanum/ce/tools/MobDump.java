@@ -9,6 +9,7 @@ import com.arcanum.ce.game.Location;
 import com.arcanum.ce.game.MapList;
 import com.arcanum.ce.game.MapMobiles;
 import com.arcanum.ce.game.NameResolver;
+import com.arcanum.ce.game.ObjectFields;
 import com.arcanum.ce.tig.TigArt;
 import com.arcanum.ce.tig.TigFile;
 
@@ -42,6 +43,12 @@ public final class MobDump {
         GameData.discoverAndRegister();
         NameResolver.install();
 
+        // The prototypes most objects inherit their art from (obj_field_fetch).
+        com.arcanum.ce.game.ProtoStore protos = com.arcanum.ce.game.ProtoStore.get();
+        System.out.println("protos:     " + protos.size() + " loaded from "
+                + protos.filesFound() + " proto\\*.pro file(s), "
+                + protos.failures().size() + " failed");
+
         String path = MapMobiles.path(mapName);
         System.out.println("map:        " + mapName);
         System.out.println("obfuscated: " + path);
@@ -71,49 +78,73 @@ public final class MobDump {
                     + "  spawn tile (" + maps.spawnTileX() + ", " + maps.spawnTileY() + ")");
         }
 
-        // Breakdown by ObjectType, overall and within the start sector.
+        // Breakdown by ObjectType, overall and within the start sector, plus the
+        // drawable split before vs after prototype resolution.
         TreeMap<Integer, Integer> typeHist = new TreeMap<>();
         TreeMap<Integer, Integer> startHist = new TreeMap<>();
         int inStart = 0;
-        int startDrawable = 0;
-        int noArt = 0;
+        int startDrawableBefore = 0;
+        int startDrawableAfter = 0;
+        int noArtBefore = 0;
+        int noArtAfter = 0;
+        // Why does an object still have no art id after resolution?
+        int missingProto = 0;       // its prototype_oid isn't in the store
+        int protoNoAid = 0;         // the proto loaded, but carries no CURRENT_AID
         for (GameObject o : r.objects) {
             typeHist.merge(o.type, 1, Integer::sum);
-            if (o.currentAid() == 0) {
-                noArt++;
+            boolean before = o.currentAid() != 0;
+            boolean after = o.currentAid(protos) != 0;
+            if (!before) {
+                noArtBefore++;
             }
-            if (Location.sectorIdFromLoc(o.location()) == startSector) {
+            if (!after) {
+                noArtAfter++;
+                if (!o.isProto && protos.proto(o.prototypeOid) == null) {
+                    missingProto++;
+                } else {
+                    protoNoAid++;
+                }
+            }
+            if (Location.sectorIdFromLoc(o.location(protos)) == startSector) {
                 inStart++;
                 startHist.merge(o.type, 1, Integer::sum);
-                if (o.currentAid() != 0) {
-                    startDrawable++;
+                if (before) {
+                    startDrawableBefore++;
+                }
+                if (after) {
+                    startDrawableAfter++;
                 }
             }
         }
         System.out.println("\nby ObjectType (whole map):");
         printHist(typeHist);
-        System.out.println("  (objects with no CURRENT_AID: " + noArt + ")");
+        System.out.println("  objects with no instance CURRENT_AID:  " + noArtBefore);
+        System.out.println("  still with no CURRENT_AID after proto: " + noArtAfter
+                + "  (proto not found: " + missingProto
+                + ", proto has no CURRENT_AID: " + protoNoAid + ")");
 
         System.out.println("\nin start sector " + startSector + ": " + inStart);
         printHist(startHist);
-        System.out.println("  drawable now (CURRENT_AID overridden on the instance): "
-                + startDrawable);
-        System.out.println("  inheriting CURRENT_AID from their prototype: "
-                + (inStart - startDrawable) + " — obj_field_fetch (obj.c) falls back to"
-                + " the proto for fields absent from the instance's dif bitmap;"
-                + " proto lookup is not ported, so these do not draw yet.");
+        System.out.println("  drawable BEFORE proto resolution (CURRENT_AID overridden"
+                + " on the instance): " + startDrawableBefore);
+        System.out.println("  drawable AFTER proto resolution (obj_field_fetch falls"
+                + " back to the prototype):  " + startDrawableAfter);
+        System.out.println("  still not drawable: " + (inStart - startDrawableAfter));
 
-        // Do the start sector's mobiles actually have renderable art?
-        System.out.println("\nstart-sector sample — CURRENT_AID -> art path:");
+        // Do the start sector's mobiles actually have renderable art, once their
+        // CURRENT_AID is resolved through the prototype? "inherited" marks the
+        // ones that had no instance art id and only draw thanks to the proto.
+        System.out.println("\nstart-sector sample — resolved CURRENT_AID -> art path:");
         int shown = 0;
         int missing = 0;
         int checked = 0;
+        int unresolvedPath = 0;
         TreeMap<Integer, Integer> missingByArtType = new TreeMap<>();
         for (GameObject o : r.objects) {
-            if (Location.sectorIdFromLoc(o.location()) != startSector) {
+            if (Location.sectorIdFromLoc(o.location(protos)) != startSector) {
                 continue;
             }
-            int aid = o.currentAid();
+            int aid = o.currentAid(protos);
             if (aid == 0) {
                 continue;
             }
@@ -123,21 +154,29 @@ public final class MobDump {
             if (!exists) {
                 missing++;
                 missingByArtType.merge(aid >>> 28, 1, Integer::sum);
+                if (artPath == null) {
+                    unresolvedPath++;
+                }
             }
             if (shown++ < 24) {
-                long loc = o.location();
+                long loc = o.location(protos);
                 // OBJ_F_NAME is an INT32 name number into the description tables
                 // (obj.c: object_fields[OBJ_F_NAME].type = OD_TYPE_INT32), not a
                 // string — print the raw id; resolving it needs description.mes.
-                System.out.printf("  %-9s tile(%2d,%2d) name#%-6s 0x%08X %-42s %s%n",
+                System.out.printf("  %-9s tile(%2d,%2d) name#%-6s 0x%08X %-11s %-38s %s%n",
                         typeName(o.type),
                         (int) (Location.getX(loc) & 63), (int) (Location.getY(loc) & 63),
-                        str(o.field(OBJ_F_NAME)),
-                        aid, artPath, exists ? "OK" : "MISSING");
+                        str(o.resolved(OBJ_F_NAME, protos)),
+                        aid, o.has(ObjectFields.OBJ_F_CURRENT_AID) ? "(instance)" : "(inherited)",
+                        artPath == null ? "<unresolved>" : artPath,
+                        exists ? "OK" : "MISSING");
             }
         }
         System.out.println("  checked " + checked + " art id(s); "
-                + (missing == 0 ? "all resolved + present ✓" : missing + " MISSING"));
+                + (missing == 0 ? "all resolved + present ✓"
+                    : missing + " MISSING (" + unresolvedPath
+                      + " with no path from NameResolver, "
+                      + (missing - unresolvedPath) + " path built but file absent)"));
         for (Map.Entry<Integer, Integer> e : missingByArtType.entrySet()) {
             System.out.println("    missing art type " + artTypeName(e.getKey())
                     + ": " + e.getValue());

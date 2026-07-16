@@ -62,6 +62,12 @@ dependencies {
 test {
     useJUnitPlatform()
     testLogging { events 'passed', 'failed', 'skipped' }
+    // Forward -Darcanum.data so the data-backed tests (sectors, mobiles, protos)
+    // can find an install that isn't at the default Steam path. Without it they
+    // guard themselves off and silently skip.
+    if (System.getProperty('arcanum.data') != null) {
+        systemProperty 'arcanum.data', System.getProperty('arcanum.data')
+    }
 }
 
 application {

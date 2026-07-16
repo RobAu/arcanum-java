@@ -96,6 +96,72 @@ public final class TigFile {
         return null;
     }
 
+    /**
+     * List the names of files directly inside {@code dir} carrying {@code suffix},
+     * across the whole repository stack. Ports the repository branch of
+     * {@code tig_file_list_create} (tig/file.c) for the fixed-directory,
+     * fixed-extension patterns the game actually uses -- e.g. proto.c's
+     * {@code tig_file_list_create(&file_list, "proto\\*.pro")}.
+     *
+     * <p>Matches the C in the two ways that matter. First, dedup and order: the
+     * result is a case-insensitively sorted set of bare filenames, exactly the
+     * array {@code tig_file_list_add} builds (it binary-searches with
+     * {@code SDL_strcasecmp}, returns early on a hit -- so the first repository
+     * to supply a name wins -- and otherwise inserts in sorted position). Callers
+     * that let later reads overwrite earlier ones therefore resolve collisions
+     * the same way the C does.
+     *
+     * <p>Second, precedence: loose roots are walked before archives, matching
+     * both {@link #readBytes} and the C, where
+     * {@code tig_file_repository_add_native} pushes each new repository onto the
+     * head of the list and {@code gamelib_load_data} adds the loose {@code data}
+     * directory <em>after</em> the {@code arcanum*.dat} archives -- so loose
+     * files deliberately win.
+     *
+     * <p>Returned names are bare filenames (no directory), as in
+     * {@code TigFileInfo.path}; join them onto {@code dir} to read.
+     *
+     * @param dir    windows-style directory, no trailing separator (e.g. {@code "proto"})
+     * @param suffix case-insensitive filename suffix (e.g. {@code ".pro"})
+     */
+    public static List<String> list(String dir, String suffix) {
+        // A case-insensitively sorted, first-wins map keyed on the bare filename
+        // *is* tig_file_list_add's entry array.
+        java.util.Map<String, String> seen =
+                new java.util.TreeMap<>(String.CASE_INSENSITIVE_ORDER);
+        String lowerSuffix = suffix.toLowerCase();
+
+        for (File root : ROOTS) {
+            File d = new File(root, Compat.windowsPathToNative(dir));
+            File[] files = d.listFiles();
+            if (files == null) {
+                continue;
+            }
+            for (File f : files) {
+                if (f.isFile() && f.getName().toLowerCase().endsWith(lowerSuffix)) {
+                    seen.putIfAbsent(f.getName(), f.getName());
+                }
+            }
+        }
+
+        // Archive entry paths are already normalized to lowercase '/' form by
+        // DatArchive; keep only immediate children of `dir` (no nested subdirs).
+        String prefix = dir.replace('\\', '/').toLowerCase() + "/";
+        for (DatArchive a : ARCHIVES) {
+            for (DatArchive.Entry e : a.files()) {
+                String p = e.path;
+                if (!p.startsWith(prefix) || !p.endsWith(lowerSuffix)) {
+                    continue;
+                }
+                String name = p.substring(prefix.length());
+                if (name.indexOf('/') < 0) {
+                    seen.putIfAbsent(name, name);
+                }
+            }
+        }
+        return new ArrayList<>(seen.values());
+    }
+
     /** tig_file_exists -- searches loose roots and archives. */
     public static boolean exists(String fileName, Object infoOut) {
         if (resolve(fileName) != null) {

@@ -73,6 +73,26 @@ public final class GameData {
                 n++;
             }
         }
+        // The retail install's loose `data\` tree, which the C mounts as a
+        // repository of its own (gamelib_load_data: `tig_file_mkdir("data");
+        // tig_file_repository_add("data")`). This is where the object prototypes
+        // live -- 1426 loose `proto\*.pro`, which proto.c reads off the
+        // repository stack; without this root no object could inherit its art.
+        //
+        // Unlike the module directory above, this root DOES shadow archive
+        // entries -- 67 of its 1431 files also exist in a .dat (65 protos in
+        // Arcanum5.dat, plus art\missing.dat and sound\soundparams.mes). That is
+        // the engine's intended precedence, not an accident:
+        // tig_file_repository_add_native pushes each new repository onto the
+        // HEAD of the search list, and gamelib_load_data adds `data` AFTER the
+        // arcanum*.dat archives -- so loose files deliberately win, which is how
+        // loose patches override packed content. TigFile searches roots before
+        // archives, giving the same result. Verified by tools.ProtoDump's
+        // shadow check (no file here shadows the module archive).
+        File data = caseInsensitive(dir, "data", true);
+        if (data != null && TigFile.repositoryAdd(data.getPath())) {
+            TigDebug.println("registered data directory " + data.getPath());
+        }
         // Also register the directory itself for loose files.
         TigFile.repositoryAdd(dir.getPath());
         TigDebug.println("registered " + n + " archive(s) from " + dir);

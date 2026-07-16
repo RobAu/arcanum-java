@@ -53,6 +53,10 @@ public final class MapWorldScreen implements Screen {
     private java.util.List<com.arcanum.ce.game.GameObject> mobiles =
             java.util.Collections.emptyList();
     private TileNames tileNames;      // for walkability; null → nothing blocks
+    // The object prototypes. Most objects don't store their own art id and
+    // inherit it from their prototype (obj_field_fetch), so without these the
+    // majority of the scene has nothing to draw.
+    private com.arcanum.ce.game.ProtoStore protos;
     private Player player;
     private int originX;
     private int originY;
@@ -70,6 +74,7 @@ public final class MapWorldScreen implements Screen {
     @Override
     public void create() {
         tileNames = TileNames.load();
+        protos = com.arcanum.ce.game.ProtoStore.get();
         int spawnX = N / 2;
         int spawnY = N / 2;
 
@@ -86,7 +91,7 @@ public final class MapWorldScreen implements Screen {
                 // whole map (map_load_mobile); keep only those standing in the
                 // sector we render. The terrain-template fallback has no such
                 // file, so this is start-map only.
-                mobiles = loadMobiles(maps);
+                mobiles = loadMobiles(maps, protos);
             } else {
                 sectorPath = FALLBACK_SECTOR;
             }
@@ -106,15 +111,16 @@ public final class MapWorldScreen implements Screen {
      * The start map's mobile objects that stand in the sector we render. The
      * mobile file spans the whole map, so filter by sector id (an object belongs
      * here iff its location's sector is the rendered one). Objects with no
-     * OBJ_F_LOCATION -- carried inventory -- have location 0 and fall out
+     * OBJ_F_LOCATION -- carried inventory -- resolve to location 0 and fall out
      * naturally, since sector 0 is not the start sector.
      */
-    private static java.util.List<com.arcanum.ce.game.GameObject> loadMobiles(MapList maps) {
+    private static java.util.List<com.arcanum.ce.game.GameObject> loadMobiles(
+            MapList maps, com.arcanum.ce.game.ProtoStore protos) {
         long sectorId = Location.sectorMake(maps.startX >> 6, maps.startY >> 6);
         java.util.List<com.arcanum.ce.game.GameObject> here = new java.util.ArrayList<>();
         for (com.arcanum.ce.game.GameObject o
                 : com.arcanum.ce.game.MapMobiles.load(maps.startMapName)) {
-            if (Location.sectorIdFromLoc(o.location()) == sectorId) {
+            if (Location.sectorIdFromLoc(o.location(protos)) == sectorId) {
                 here.add(o);
             }
         }
@@ -315,26 +321,24 @@ public final class MapWorldScreen implements Screen {
     private void addObjectSprites(java.util.List<Sprite> sprites,
                                   java.util.List<com.arcanum.ce.game.GameObject> objects) {
         for (com.arcanum.ce.game.GameObject o : objects) {
-            int aid = o.currentAid();
+            // Art, location and offsets all go through the prototype fallback
+            // (obj_field_fetch): most objects override none of them on the
+            // instance and inherit them from their prototype.
+            int aid = o.currentAid(protos);
             if (aid == 0) {
-                continue;                       // no drawable art (mobiles without a set AID)
+                continue;                       // no art on the instance nor its proto
             }
             // OBJ_F_LOCATION holds a full world location; the sector-local tile
             // (0..63) is its low 6 bits per axis (cf. Location.tileIndexInSector).
-            long oloc = o.location();
+            long oloc = o.location(protos);
             int ox = (int) (Location.getX(oloc) & (N - 1));
             int oy = (int) (Location.getY(oloc) & (N - 1));
             long tl = Location.make(ox, oy);
             sprites.add(new Sprite(ox + oy, ox, 0, aid,
                     Location.screenX(tl, originX), Location.screenY(tl, originY),
-                    objInt(o, OBJ_F_OFFSET_X), objInt(o, OBJ_F_OFFSET_Y)));
+                    o.resolvedInt(OBJ_F_OFFSET_X, protos),
+                    o.resolvedInt(OBJ_F_OFFSET_Y, protos)));
         }
-    }
-
-    /** Read an INT32 object field by ordinal, or 0 if absent. */
-    private static int objInt(com.arcanum.ce.game.GameObject o, int ordinal) {
-        Object v = o.field(ordinal);
-        return v instanceof Integer ? (Integer) v : 0;
     }
 
     private final int[] hot = new int[2];
