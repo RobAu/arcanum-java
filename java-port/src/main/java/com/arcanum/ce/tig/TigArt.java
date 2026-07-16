@@ -188,6 +188,41 @@ public final class TigArt {
         return 0;
     }
 
+    /** Number of animation frames in the art an {@code art_id} resolves to (1 if unresolved). */
+    public static int frameCount(int artId) {
+        String path = buildPath(artId);
+        if (path == null) {
+            return 1;
+        }
+        ArtFile art = load(path);
+        return art != null ? Math.max(1, art.numFrames) : 1;
+    }
+
+    /**
+     * tig_art_frame_data (hotspot only): writes the resolved frame's {@code hot_x}/
+     * {@code hot_y} into {@code outXY}. Used to anchor objects on their tile
+     * ({@code object_get_rect}). Returns false (and leaves {@code outXY} zeroed)
+     * if the art is unresolved.
+     */
+    public static boolean frameHotspot(int artId, int[] outXY) {
+        outXY[0] = 0;
+        outXY[1] = 0;
+        String path = buildPath(artId);
+        if (path == null) {
+            return false;
+        }
+        ArtFile art = load(path);
+        if (art == null) {
+            return false;
+        }
+        int rot = Math.min(ArtId.rotation(artId), art.numRotations - 1);
+        int frame = Math.min(ArtId.frame(artId), art.numFrames - 1);
+        ArtFile.Frame fr = art.frames[rot][frame];
+        outXY[0] = fr.hotX;
+        outXY[1] = fr.hotY;
+        return true;
+    }
+
     // -- art_id -> path / draw ------------------------------------------------
     /** Register the game's resolver for non-system art (cf. name_resolve_path). */
     public static void setFilePathResolver(ArtPathResolver resolver) {

@@ -20,15 +20,25 @@ import com.arcanum.ce.tig.TigArt;
  * sector's 4096 tile {@code art_id}s ({@link SectorFile}), project each with the
  * engine's isometric transform ({@link Location}), and blit via {@link TigArt}.
  *
+ * <p>On top of the terrain it draws the sector's object list ({@link SectorFile}
+ * objects — scenery, walls, critters) depth-sorted with the player, each anchored
+ * on its tile by the art hotspot ({@code object_get_rect}).
+ *
  * <p>Controls: arrow keys / WASD walk (8 directions, camera follows); left-click
  * a tile to walk there; Escape or right-click returns to the menu. The sector
- * is set by {@code -Darcanum.sector=<repository\path.sec>} (default: plains).
+ * is set by {@code -Darcanum.sector=<repository\path.sec>} (default: a wooded
+ * template full of trees, so New Game opens into a populated scene).
  */
 public final class MapWorldScreen implements Screen {
 
-    private static final String DEFAULT_SECTOR = "terrain\\plains\\0.sec";
+    // A terrain template that ships a populated object list (834 scenery trees),
+    // so New Game opens into woods rather than an empty plain.
+    private static final String DEFAULT_SECTOR = "terrain\\broad leaf forest to plains\\0.sec";
     private static final int N = Location.TILES_PER_SECTOR_AXIS;   // 64
-    private static final int STEP_COOLDOWN_FRAMES = 7;             // ~8 tiles/sec
+    private static final int OBJ_F_OFFSET_X = 3;   // OBJ_F_OFFSET_X (INT32)
+    private static final int OBJ_F_OFFSET_Y = 4;   // OBJ_F_OFFSET_Y (INT32)
+    // Tween speed: fraction of a tile per frame (~7 frames/tile ≈ 8 tiles/sec at 60fps).
+    private static final double WALK_SPEED = 1.0 / 7.0;
 
     // Tile delta per facing direction (location_in_dir order, dir 0..7).
     private static final int[] DIR_DX = {-1, -1, -1, 0, 1, 1, 1, 0};
@@ -40,7 +50,6 @@ public final class MapWorldScreen implements Screen {
     private Player player;
     private int originX;
     private int originY;
-    private int cooldown;
     private int targetX = -1;        // click-to-move target tile, -1 = none
     private int targetY = -1;
 
@@ -77,9 +86,16 @@ public final class MapWorldScreen implements Screen {
         }
 
         update();
-        // Camera follows the player: keep the player's tile at the window centre.
-        originX = width / 2 - Location.screenX(player.loc(), 0);
-        originY = height / 2 - Location.screenY(player.loc(), 0);
+
+        // Camera follows the player, tracking the smooth walk tween between tiles:
+        // interpolate the player's base screen position and keep it window-centred.
+        double t = player.walkT();
+        long fromLoc = player.prevLoc();
+        long toLoc = player.loc();
+        int pbx = (int) Math.round(lerp(Location.screenX(fromLoc, 0), Location.screenX(toLoc, 0), t));
+        int pby = (int) Math.round(lerp(Location.screenY(fromLoc, 0), Location.screenY(toLoc, 0), t));
+        originX = width / 2 - pbx;
+        originY = height / 2 - pby;
 
         // Terrain, back-to-front (increasing X+Y) so taller tiles overlap right.
         for (int d = 0; d <= 2 * (N - 1); d++) {
@@ -94,10 +110,40 @@ public final class MapWorldScreen implements Screen {
             }
         }
 
-        // Player on top of the terrain at its tile.
-        TigArt.draw(batch, player.artId(),
-                Location.screenX(player.loc(), originX),
-                Location.screenY(player.loc(), originY), height);
+        // Objects (scenery / walls / critters) and the player share one
+        // back-to-front pass, sorted by tile depth so nearer sprites overlap
+        // farther ones and the player is correctly occluded. Each is anchored on
+        // its tile by the art frame's hotspot (object_get_rect).
+        int frame = 0;
+        if (player.isMoving()) {
+            int frames = TigArt.frameCount(player.artId(0));
+            frame = Math.min(frames - 1, (int) (t * frames));
+        }
+
+        java.util.List<Sprite> sprites = new java.util.ArrayList<>(sector.objects.size() + 1);
+        for (com.arcanum.ce.game.GameObject o : sector.objects) {
+            int aid = o.currentAid();
+            if (aid == 0) {
+                continue;                       // no drawable art (mobiles without a set AID)
+            }
+            long oloc = o.location();
+            int ox = (int) Location.getX(oloc);
+            int oy = (int) Location.getY(oloc);
+            if (ox < 0 || ox >= N || oy < 0 || oy >= N) {
+                continue;
+            }
+            long tl = Location.make(ox, oy);
+            sprites.add(new Sprite(ox + oy, ox, 0, aid,
+                    Location.screenX(tl, originX), Location.screenY(tl, originY),
+                    objInt(o, OBJ_F_OFFSET_X), objInt(o, OBJ_F_OFFSET_Y)));
+        }
+        // The player draws after any object sharing its tile (order = 1).
+        sprites.add(new Sprite(player.x() + player.y(), player.x(), 1,
+                player.artId(frame), pbx + originX, pby + originY, 0, 0));
+        sprites.sort(SPRITE_ORDER);
+        for (Sprite s : sprites) {
+            drawSprite(batch, s.artId, s.baseX, s.baseY, s.offX, s.offY, height);
+        }
 
         font.setColor(Color.WHITE);
         font.draw(batch, sectorPath + "   tile (" + player.x() + ", " + player.y()
@@ -109,6 +155,9 @@ public final class MapWorldScreen implements Screen {
         if (Gdx.input == null) {
             return;
         }
+
+        // Drive the walk tween; the next step can't begin until it completes.
+        player.advanceWalk(WALK_SPEED);
 
         // A left-click (in the world) sets a walk-to target.
         if (Gdx.input.justTouched()
@@ -123,8 +172,7 @@ public final class MapWorldScreen implements Screen {
             }
         }
 
-        if (cooldown > 0) {
-            cooldown--;
+        if (player.isMoving()) {
             return;
         }
 
@@ -165,7 +213,6 @@ public final class MapWorldScreen implements Screen {
                 && !Tile.isBlocking(sector.tileAt(nx, ny), tileNames)) {
             player.setAnim(Player.ANIM_WALK);
             player.setTile(nx, ny);
-            cooldown = STEP_COOLDOWN_FRAMES;
             return true;
         }
         player.setAnim(Player.ANIM_STAND);
@@ -223,6 +270,55 @@ public final class MapWorldScreen implements Screen {
     private static boolean down(int k1, int k2) {
         return Gdx.input.isKeyPressed(k1) || Gdx.input.isKeyPressed(k2);
     }
+
+    private static double lerp(double a, double b, double t) {
+        return a + (b - a) * t;
+    }
+
+    /** Read an INT32 object field by ordinal, or 0 if absent. */
+    private static int objInt(com.arcanum.ce.game.GameObject o, int ordinal) {
+        Object v = o.field(ordinal);
+        return v instanceof Integer ? (Integer) v : 0;
+    }
+
+    private final int[] hot = new int[2];
+
+    /** Anchor an art on its tile: screen = tileScreen + offset + (40,20) − hotspot. */
+    private void drawSprite(SpriteBatch batch, int artId, float baseX, float baseY,
+                            int offX, int offY, int height) {
+        TigArt.frameHotspot(artId, hot);
+        TigArt.draw(batch, artId, baseX + offX + 40 - hot[0],
+                baseY + offY + 20 - hot[1], height);
+    }
+
+    /** One depth-sortable sprite (an object or the player) queued for drawing. */
+    private static final class Sprite {
+        final int depth;    // tile x+y (primary, back-to-front)
+        final int tieX;     // tile x   (secondary, matches terrain scan order)
+        final int order;    // 0 = object, 1 = player (drawn last on a shared tile)
+        final int artId;
+        final float baseX;
+        final float baseY;
+        final int offX;
+        final int offY;
+
+        Sprite(int depth, int tieX, int order, int artId,
+               float baseX, float baseY, int offX, int offY) {
+            this.depth = depth;
+            this.tieX = tieX;
+            this.order = order;
+            this.artId = artId;
+            this.baseX = baseX;
+            this.baseY = baseY;
+            this.offX = offX;
+            this.offY = offY;
+        }
+    }
+
+    private static final java.util.Comparator<Sprite> SPRITE_ORDER =
+            java.util.Comparator.comparingInt((Sprite s) -> s.depth)
+                    .thenComparingInt(s -> s.tieX)
+                    .thenComparingInt(s -> s.order);
 
     private void handleBack() {
         if (Gdx.input != null

@@ -30,12 +30,17 @@ public final class Player {
 
     private int x;
     private int y;
+    private int prevX;                  // tile being walked away from (for tween)
+    private int prevY;
+    private double walkT = 1.0;         // 0..1 progress from prev tile to (x,y)
     private int rotation;
     private int anim = ANIM_STAND;
 
     public Player(int x, int y) {
         this.x = x;
         this.y = y;
+        this.prevX = x;
+        this.prevY = y;
     }
 
     public int x() {
@@ -46,14 +51,44 @@ public final class Player {
         return y;
     }
 
-    /** Location of the player's current tile. */
+    /** Location of the player's current (destination) tile. */
     public long loc() {
         return Location.make(x, y);
     }
 
+    /** Location of the tile the player is walking from (equals {@link #loc()} when idle). */
+    public long prevLoc() {
+        return Location.make(prevX, prevY);
+    }
+
+    /**
+     * Begin a walk step into {@code (x, y)}: the sprite tweens from its current
+     * tile to the new one. Logical position updates immediately; the visual
+     * catch-up is driven by {@link #advanceWalk}.
+     */
     public void setTile(int x, int y) {
+        this.prevX = this.x;
+        this.prevY = this.y;
         this.x = x;
         this.y = y;
+        this.walkT = 0.0;
+    }
+
+    /** Advance the tween by {@code inc} (fraction of a tile); clamps at 1. */
+    public void advanceWalk(double inc) {
+        if (walkT < 1.0) {
+            walkT = Math.min(1.0, walkT + inc);
+        }
+    }
+
+    /** Tween progress 0..1 from {@link #prevLoc()} to {@link #loc()}. */
+    public double walkT() {
+        return walkT;
+    }
+
+    /** True while the sprite is still sliding between tiles. */
+    public boolean isMoving() {
+        return walkT < 1.0;
     }
 
     public void setRotation(int rotation) {
@@ -64,9 +99,14 @@ public final class Player {
         this.anim = anim;
     }
 
-    /** The critter {@code art_id} for the current facing + animation. */
+    /** The critter {@code art_id} for the current facing + animation, frame 0. */
     public int artId() {
+        return artId(0);
+    }
+
+    /** The critter {@code art_id} for the current facing + animation at {@code frame}. */
+    public int artId(int frame) {
         return ArtId.critterIdCreate(GENDER, BODY_TYPE, ARMOR, SHIELD,
-                /* frame */ 0, rotation, anim, WEAPON, PALETTE);
+                frame, rotation, anim, WEAPON, PALETTE);
     }
 }

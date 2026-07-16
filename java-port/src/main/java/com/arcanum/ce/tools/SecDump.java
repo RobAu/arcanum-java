@@ -30,7 +30,9 @@ public final class SecDump {
     }
 
     public static void main(String[] args) throws Exception {
-        String internal = args.length > 0 ? args[0] : "terrain/plains/0.sec";
+        // -Darcanum.sec preserves paths with spaces (runTool splits -Pargs on whitespace).
+        String internal = System.getProperty("arcanum.sec",
+                args.length > 0 ? args[0] : "terrain/plains/0.sec");
         File dir = new File(System.getProperty("arcanum.data", "."));
 
         // Register archives so Mes/TigArt resolution works, then build the tile
@@ -87,6 +89,40 @@ public final class SecDump {
         System.out.println(missing == 0
                 ? "all tile art resolved + present ✓"
                 : missing + " distinct tile id(s) unresolved/missing");
+
+        // Object layer: parse the full sector and resolve each object's art so we
+        // know the scenery/critters will actually render (object-rendering-spec.md).
+        com.arcanum.ce.game.NameResolver.install();
+        com.arcanum.ce.game.SectorFile sec = com.arcanum.ce.game.SectorFile.parse(bytes);
+        if (sec == null) {
+            System.out.println("\nobjects: sector parse returned null (alignment failed)");
+            return;
+        }
+        System.out.println("\nobjects: " + sec.objects.size());
+        java.util.TreeMap<Integer, Integer> aidHist = new java.util.TreeMap<>();
+        java.util.TreeMap<Integer, Integer> typeHist = new java.util.TreeMap<>();
+        for (com.arcanum.ce.game.GameObject o : sec.objects) {
+            typeHist.merge(o.type, 1, Integer::sum);
+            aidHist.merge(o.currentAid(), 1, Integer::sum);
+        }
+        System.out.println("  by ObjectType: " + typeHist);
+        int objMissing = 0;
+        int shown = 0;
+        for (java.util.Map.Entry<Integer, Integer> e : aidHist.entrySet()) {
+            int aid = e.getKey();
+            String path = com.arcanum.ce.tig.TigArt.buildPath(aid);
+            boolean exists = path != null && TigFile.exists(path, null);
+            if (!exists) {
+                objMissing++;
+            }
+            if (shown++ < 20) {
+                System.out.printf("  0x%08X  x%-4d  %-40s %s%n",
+                        aid, e.getValue(), path, exists ? "OK" : "MISSING");
+            }
+        }
+        System.out.println("  distinct object art_ids: " + aidHist.size()
+                + (objMissing == 0 ? "  all resolved + present ✓"
+                                   : "  " + objMissing + " unresolved/missing"));
     }
 
     /** Decode a tile art_id per the bitfields in tile-rendering-spec.md. */

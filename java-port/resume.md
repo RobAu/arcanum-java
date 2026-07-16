@@ -1,9 +1,34 @@
 # Resume — Arcanum CE Java port (world view + player)
 
 **Where we are:** menu → **New Game** opens an isometric world view that renders
-real `.sec` terrain from the `.dat` archives, with a controllable player critter
-drawn on top. Verified: the dwarf sprite renders standing on plains terrain and
-the camera follows it.
+real `.sec` terrain **plus its object list** (scenery) from the `.dat` archives,
+with a controllable player critter that **glides** (smooth tween-walk) between
+tiles and a camera that follows. New Game now spawns in a *populated* template
+(`terrain\broad leaf forest to plains\0.sec`, 834 scenery objects — grass tufts +
+dead bushes, all art resolves) instead of an empty plain.
+
+## Latest work (uncommitted → committed this session)
+- **Object parsing** (`object-rendering-spec.md`): full `.sec` object list ported
+  — `ObjectFields` (314-field metadata: wire types + dif-bitmap `cai/bit` +
+  per-type word counts/ranges, mirroring `sub_40A8A0/40A400/40C030`), `GameObject`,
+  `ObjReader` (`obj_read` inst+proto paths; note `num_fields` is **int16**),
+  `SectorFile` extended through roofs/scripts/townmap/blocks to the trailing
+  objlist. Verified byte-exact against **all 165 archived sectors with objects**
+  (trailing-count oracle) + `SectorObjectListTest`.
+- **Object rendering** (`MapWorldScreen`): objects + player drawn in one
+  depth-sorted pass, anchored by art hotspot (`object_get_rect`:
+  `tileScreen + offset + (40,20) − hotspot`); `TigArt.frameHotspot`/`frameCount`.
+- **Smooth walk** (`Player`/`MapWorldScreen`): tile-to-tile tween + walk-frame
+  cycling; steps gate on tween completion (replaced the frame cooldown).
+- `SecDump` extended to dump + art-resolve the object layer (`-Darcanum.sec=`).
+
+### Next / follow-ups
+- Object collision (block on WALL/scenery with the blocking flag; current forest
+  scenery is non-blocking so the scene is fully walkable already).
+- Richer scenes: campaign maps need `.dif`/`.mob` overlays + the encrypted
+  `modules/Arcanum/maps/*` (still unsolved); base templates only carry natural
+  scenery. Decode array/handle object fields (currently consumed, not stored).
+- Basic interaction (click object → name/description), multi-sector scrolling.
 
 ## Committed (on `java-port` branch)
 - `447812cf` — real Arcanum font in the menu (`TigFontRenderer`)
