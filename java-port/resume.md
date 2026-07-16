@@ -87,6 +87,57 @@ you can walk around the crash site.
   `ART_ID_NUM_SHIFT`. Start-sector art misses **39 → 2**; ground loot now draws
   (staff, robe, coins, ginka root, a passport by the wreck).
 
+- **Click-to-identify + talking** (`SizeableArray`/`Script`/`Sap`, `Description`,
+  `OName`, `ObjectName`, `ScriptName`, `DialogFile`, `DialogUi`, `tools.NpcDump`
+  /`DlgDump`): click an object → name; click an NPC with a `SAP_DIALOG` script →
+  its `.dlg` opens, line floating above them, responses pickable (1-9/click/Esc).
+  Virgil: tile (31,34) → script 1324 → `dlg\01324Virgil.dlg`, 409 entries.
+  - **`OBJ_F_NAME` is NOT the display name.** It routes to `oname.mes` (the
+    *internal/editor* name) via `o_name_get` (obj.c:1703). The player-facing name
+    is **`OBJ_F_DESCRIPTION` → `description_get`**, via `object_examine`
+    (object.c:3934). Virgil: NAME=6409 → "6409 Virgil" (and **null** in
+    description.mes); DESCRIPTION=31073 → "Virgil" (≥30000 → gamedesc.mes);
+    CRITTER_DESCRIPTION_UNKNOWN=17082 → "Human Villager" (shown until known).
+  - **`OBJ_F_SCRIPTS_IDX` is a *sparse* array**: `sa_get` maps key→slot via
+    `bitset_rank` (set bits *before* the key). Measured: of 21 protos with a
+    `SAP_DIALOG`, **21/21** have `rank(9) != 9` and `element[9]` is out of bounds.
+    Indexing by the raw key fails 100% — silently.
+  - `.dlg` is **plain text**: 7 `{...}` fields (num, text, gender-or-female-text,
+    iq, conditions, responseVal, actions); `iq` blank/0 = NPC line, non-zero = PC
+    response + its minimum IQ. Response filter (dialog.c:1348): `iq<0` is a
+    *maximum*, `iq>=0` a minimum. Text bubbles have **no art** — `tb_background_color`
+    is the colour *key*, so a bubble is floating text: font interface art **229**,
+    centred, 1px shadow, wrapped to 200px (tb.c).
+- **Multi-sector world** (`WorldMap`, `MapProperties`, `Location.LocRect`/
+  `visibleLocRect`, `tools.WorldDump`; `Player` now holds **world** tiles as
+  `long`): sectors load on demand into a cache, and terrain/collision/objects/
+  picking all query in world coords. The start map is **621 `.sec` files** (sector
+  x 268–1754, y 178–1889), not one; 7399 mobiles across **241** sectors.
+  - `map.prp` (24B struct, map.c:82): base_terrain_type=2, width/height =
+    **128000 tiles** = 2000×2000 sectors. `map_open` → `sector_limits_set(w>>6, h>>6)`.
+  - **Culling**: `gamelib_draw` feeds `gamelib_iso_content_rect_ex` — exactly
+    **256px per side** (gamelib.c:357) — to `location_screen_rect_to_loc_rect`.
+    2025 tiles at 800×600 (vs 4096 drawn blindly before), 0.034 ms/frame.
+    Verified empirically: re-rendering at margin 1024 differs by **0 pixels**.
+  - **Corrections to earlier assumptions:** `terrain_fill` does **not** use
+    `base_terrain_type` — it hardcodes `tig_art_tile_id_create(7,7,15,0,0,0,0,0)`
+    (terrain.c:421); `map.prp`'s `padding_4` holds **1** on the start map (never
+    read); sectors live under a base **directory** (`sector_base_path`,
+    sector.c:839), not literally `maps\`.
+  - **Approximation:** missing sectors render empty + unwalkable (no
+    `terrain_sector_path`/`terrain_fill` port). Bounds are 2000×2000 sectors but
+    only 621 ship, so **missing sectors — not bounds — fence the player**. The map
+    fences itself: sector (1454,1290) is a solid 4096-tile `Blkbse0a` black filler,
+    0 objects, blocking terrain.
+  - Dev hooks: `-Darcanum.spawn` is now **world** tiles (values <64 on both axes
+    still read as sector-local); `-Darcanum.walk=<dir>,<steps>` drives walking
+    headlessly; `-Darcanum.pick=x,y` forces one pick.
+- **Window resize** (`ArcanumGame.resize`): a `SpriteBatch` keeps the projection
+  it was built with, so after a resize the screens laid out against the new
+  `Gdx.graphics` size while drawing stayed in the old one — the cursor drifted
+  from the picture. Re-project to the new logical size; GL viewport takes
+  back-buffer pixels (they differ on HiDPI).
+
 ### Next / follow-ups
 - **2 MONSTER art ids still miss**: resolver builds `mpgCDXAa.art` but
   `arcanum1.dat` ships only `mpgUW*` variants — a monster armour-encoding
@@ -98,8 +149,13 @@ you can walk around the crash site.
   outfit variants shared across body types, not character names.
 - Note: mobile counts are **7405 / 5915** (an earlier note said 7399/5913;
   verified against clean HEAD — the older figure was simply wrong).
-- **Multi-sector scrolling**: we render one 64×64 sector, so the map edge is a
-  hard stop; the start map has many sectors.
+- **Dialog conditions + actions are not evaluated** — they need the script VM.
+  Conditions (`re62` reaction, `gf2004` global flag) being ignored is *visible*:
+  reaction-gated variants of the same line both appear, so Virgil's opening shows
+  each response twice. Actions (`gf2004 1, qu1010 2`) are captured but not
+  applied, so nothing you say changes world state.
+- **Missing-sector fallback**: port `terrain_sector_path` + `terrain_fill` so the
+  621 shipped sectors aren't surrounded by unwalkable void.
 - Object collision (block on WALL/scenery with the blocking flag) — crash-site
   scenery is non-blocking, so it's fully walkable today.
 - Facades in this map's tile layer are drawn flat (no hotspot offset) — the big

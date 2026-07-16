@@ -9,6 +9,13 @@ import com.arcanum.ce.tig.art.ArtId;
  * sprite is a critter {@code art_id} built from those, drawn via the standard
  * {@link com.arcanum.ce.tig.TigArt} pipeline.
  *
+ * <p>The position is a <em>world</em> tile, as {@code OBJ_F_LOCATION} is for
+ * every other object — not a sector-local 0..63 tile. A map is 64×64-tile
+ * sectors wide (the retail start map is nominally 2000×2000 of them), so these
+ * are {@code long}s and routinely run into the tens of thousands: the campaign
+ * start location is (92958, 82592). The sector a tile falls in is
+ * {@code (x >> 6, y >> 6)} — {@link Location#sectorIdFromLoc}.
+ *
  * <p>Appearance is a fixed placeholder (the demo dwarf) until character creation
  * exists. {@code STAND}/{@code WALK} are {@code TIG_ART_ANIM_*} values.
  */
@@ -28,27 +35,34 @@ public final class Player {
     private static final int WEAPON = 2;
     private static final int PALETTE = 0;
 
-    private int x;
-    private int y;
-    private int prevX;                  // tile being walked away from (for tween)
-    private int prevY;
+    private long x;                     // world tile X (not sector-local)
+    private long y;                     // world tile Y
+    private long prevX;                 // tile being walked away from (for tween)
+    private long prevY;
     private double walkT = 1.0;         // 0..1 progress from prev tile to (x,y)
     private int rotation;
     private int anim = ANIM_STAND;
 
-    public Player(int x, int y) {
+    public Player(long x, long y) {
         this.x = x;
         this.y = y;
         this.prevX = x;
         this.prevY = y;
     }
 
-    public int x() {
+    /** World tile X. */
+    public long x() {
         return x;
     }
 
-    public int y() {
+    /** World tile Y. */
+    public long y() {
         return y;
+    }
+
+    /** The sector the player currently stands in ({@code sector_id_from_loc}). */
+    public long sectorId() {
+        return Location.sectorIdFromLoc(loc());
     }
 
     /** Location of the player's current (destination) tile. */
@@ -66,7 +80,7 @@ public final class Player {
      * tile to the new one. Logical position updates immediately; the visual
      * catch-up is driven by {@link #advanceWalk}.
      */
-    public void setTile(int x, int y) {
+    public void setTile(long x, long y) {
         this.prevX = this.x;
         this.prevY = this.y;
         this.x = x;

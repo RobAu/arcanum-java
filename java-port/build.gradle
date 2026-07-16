@@ -85,6 +85,7 @@ tasks.register('compileGenerated') {
 run {
     ['arcanum.data', 'arcanum.screenshot', 'arcanum.menu', 'arcanum.hover',
      'arcanum.screen', 'arcanum.sector', 'arcanum.spawn', 'arcanum.pick',
+     'arcanum.walk',
      'org.lwjgl.util.NoChecks'].each { k ->
         if (System.getProperty(k) != null) systemProperty k, System.getProperty(k)
     }
